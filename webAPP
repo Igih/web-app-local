@@ -1,0 +1,43 @@
+server {
+    listen 80;
+    server_name localhost;  # Replace with your domain or IP
+
+    # Serve static files directly
+    location /assets/ {
+        alias /home/linux/codes/web-app-local/app-signIn/dist/assets/;
+        expires 30d;
+        access_log off;
+    }
+
+    location /static/ {
+        alias /home/linux/codes/web-app-local/app-signIn/dist/;
+        expires 30d;
+        access_log off;
+    }
+
+    location /category_images/ {
+        alias /home/linux/codes/datasets/category_images/;
+        expires 30d;
+        access_log off;
+    }
+
+    # Proxy API requests to FastAPI
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+	    client_max_body_size 50G;
+    }
+
+    # Serve SPA (fallback for client-side routing)
+    location / {
+        root /home/linux/codes/web-app-local/app-signIn/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Error and access logs
+    access_log /var/log/nginx/yourapp_access.log;
+    error_log /var/log/nginx/yourapp_error.log;
+}
