@@ -54,7 +54,11 @@
           <Icon icon="mdi:document" class="menu-icon" />
           <span>Logs</span>
         </el-menu-item>
-        <el-menu-item index="7" @click="goToUserDatasetManager">
+        <el-menu-item 
+          index="7" 
+          @click="goToUserDatasetManager"
+          v-if="authStore.currentUser && authStore.currentUser.role === 'user'"
+        >
           <Icon icon="mdi:account-data" class="menu-icon" />
           <span>My Data</span>
         </el-menu-item>
@@ -74,6 +78,7 @@
           </span>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item command="change-password">Change Password</el-dropdown-item>
               <el-dropdown-item command="logout">Logout</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -106,29 +111,82 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 修改密码对话框 -->
+    <el-dialog v-model="changePasswordDialogVisible" title="Change Password" width="30%">
+      <el-form :model="changePasswordForm" label-width="120px" :rules="passwordRules" ref="changePasswordFormRef">
+        <el-form-item label="Current Password" prop="currentPassword">
+          <el-input v-model="changePasswordForm.currentPassword" type="password" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="New Password" prop="newPassword">
+          <el-input v-model="changePasswordForm.newPassword" type="password" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="Confirm Password" prop="confirmPassword">
+          <el-input v-model="changePasswordForm.confirmPassword" type="password" autocomplete="off" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="changePasswordDialogVisible = false">Cancel</el-button>
+          <el-button type="primary" @click="handleChangePassword">Submit</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
-  
-  <script setup>
-  import { ref, onMounted, computed } from 'vue'
-  import { useRouter, useRoute } from 'vue-router'
-  import { Icon } from '@iconify/vue'
-  import { ElMessage } from 'element-plus'
-  import { useAuthStore } from '@/stores/auth'
-  import { ArrowDown } from '@element-plus/icons-vue'
-  import axios from 'axios'
-  
-  const router = useRouter()
-  const route = useRoute()
-  const authStore = useAuthStore()
-  const categories = ref([])
-  const loginDialogVisible = ref(false)
-  const loginForm = ref({
-    username: '',
-    password: ''
-  })
-  
-  const activeIndex = computed(() => {
+
+<script setup>
+import { ref, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { Icon } from '@iconify/vue'
+import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
+import { ArrowDown } from '@element-plus/icons-vue'
+import axios from 'axios'
+
+const router = useRouter()
+const route = useRoute()
+const authStore = useAuthStore()
+const categories = ref([])
+const loginDialogVisible = ref(false)
+const changePasswordDialogVisible = ref(false)
+const changePasswordFormRef = ref(null)
+
+const loginForm = ref({
+  username: '',
+  password: ''
+})
+
+const changePasswordForm = ref({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+const passwordRules = {
+  currentPassword: [
+    { required: true, message: 'Please enter your current password', trigger: 'blur' }
+  ],
+  newPassword: [
+    { required: true, message: 'Please enter your new password', trigger: 'blur' },
+    { min: 6, message: 'Password must be at least 6 characters', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: 'Please confirm your new password', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (value !== changePasswordForm.value.newPassword) {
+          callback(new Error('Passwords do not match'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
+}
+
+const activeIndex = computed(() => {
   if (route.path === '/') {
     return '0'
   } else if (route.path === '/dataset-manager') {
@@ -140,155 +198,176 @@
   }
   return '0'
 })
-  
-  const fetchCategories = async () => {
-    try {
-      const response = await axios.get('/api/categories_show')
-      categories.value = response.data.categories_show.map(item => ({
-        id: item.id,
-        name: item.category,
-        icon: getCategoryIcon(item.category)
-      }))
-    } catch (error) {
-      console.error('Failed to fetch categories:', error)
-    }
-  }
-  
-  const getCategoryIcon = (category) => {
-    const iconMap = {
-      plane: 'mdi:airplane',
-      car: 'mdi:car',
-      ship: 'mdi:ferry',
-      tank: 'mdi:tank',
-      drone: 'mdi:drone',
-    }
-    return iconMap[category.toLowerCase()] || 'mdi:database'
-  }
-  
-  const goToCategory = (category) => {
-    router.push(`/dataset/${category.toLowerCase()}`)
-  }
-  
-  const goToDatasetManager = () => {
-    if (authStore.currentUser && authStore.currentUser.role === 'admin') {
-      router.push('/dataset-manager')
-    } else {
-      ElMessage.error('Access denied: Admin role required')
-    }
-  }
 
-  const goToUserDatasetManager = () => {
+const fetchCategories = async () => {
+  try {
+    const response = await axios.get('/api/categories_show')
+    categories.value = response.data.categories_show.map(item => ({
+      id: item.id,
+      name: item.category,
+      icon: getCategoryIcon(item.category)
+    }))
+  } catch (error) {
+    console.error('Failed to fetch categories:', error)
+  }
+}
+
+const getCategoryIcon = (category) => {
+  const iconMap = {
+    plane: 'mdi:airplane',
+    car: 'mdi:car',
+    ship: 'mdi:ferry',
+    tank: 'mdi:tank',
+    drone: 'mdi:drone',
+  }
+  return iconMap[category.toLowerCase()] || 'mdi:database'
+}
+
+const goToCategory = (category) => {
+  router.push(`/dataset/${category.toLowerCase()}`)
+}
+
+const goToDatasetManager = () => {
+  if (authStore.currentUser && authStore.currentUser.role === 'admin') {
+    router.push('/dataset-manager')
+  } else {
+    ElMessage.error('Access denied: Admin role required')
+  }
+}
+
+const goToUserDatasetManager = () => {
   router.push('/user-dataset-manager')
 }
-  
-  const goToHome = () => {
+
+const goToHome = () => {
+  router.push('/')
+}
+
+const showLoginDialog = () => {
+  loginDialogVisible.value = true
+}
+
+const handleLogin = async () => {
+  try {
+    await authStore.login(loginForm.value)
+    ElMessage.success('Login successful')
+    loginDialogVisible.value = false
+    loginForm.value = { username: '', password: '' }
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || 'Login failed')
+  }
+}
+
+const handleChangePassword = async () => {
+  try {
+    await changePasswordFormRef.value.validate()
+    const response = await axios.post('/api/change-password', {
+      current_password: changePasswordForm.value.currentPassword,
+      new_password: changePasswordForm.value.newPassword
+    })
+    ElMessage.success('Password changed successfully')
+    changePasswordDialogVisible.value = false
+    changePasswordForm.value = {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    }
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || 'Failed to change password')
+  }
+}
+
+const handleUserCommand = (command) => {
+  if (command === 'logout') {
+    authStore.logout()
+    ElMessage.success('Logout successful')
     router.push('/')
+  } else if (command === 'change-password') {
+    changePasswordDialogVisible.value = true
   }
-  
-  const showLoginDialog = () => {
-    loginDialogVisible.value = true
-  }
-  
-  const handleLogin = async () => {
-    try {
-      await authStore.login(loginForm.value)
-      ElMessage.success('Login successful')
-      loginDialogVisible.value = false
-      loginForm.value = { username: '', password: '' }
-    } catch (error) {
-      ElMessage.error(error.response?.data?.detail || 'Login failed')
-    }
-  }
-  
-  const handleUserCommand = (command) => {
-    if (command === 'logout') {
-      authStore.logout()
-      ElMessage.success('Logout successful')
-      router.push('/')
-    }
-  }
-  
-  onMounted(() => {
-    fetchCategories()
-  })
-  </script>
-  
-  <style scoped>
-  .layout-container {
-    min-height: 100vh;
-    background-color: #f5f7fa;
-    font-family: 'Arial', sans-serif;
-  }
-  
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 50px;
-    background-color: #fff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  .logo {
-    font-size: 24px;
-    font-weight: bold;
-    color: #6b48ff;
-    cursor: pointer;
-    transition: color 0.3s;
-  }
-  
-  .logo:hover {
-    color: #4a2dcc;
-  }
-  
-  .nav-menu {
-    flex-grow: 1;
-    margin-left: 50px;
-    background-color: transparent;
-    border-bottom: none;
-  }
-  
-  .menu-icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 8px;
-    vertical-align: middle;
-  }
-  
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
-  
-  .sign-in {
-    color: #606266;
-    font-size: 16px;
-    cursor: pointer;
-    transition: color 0.3s;
-  }
-  
-  .sign-in:hover {
-    color: #409EFF;
-  }
-  
-  .user-welcome {
-    color: #67c23a;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-  }
-  
-  .user-welcome:hover {
-    color: #85ce61;
-  }
-  
-  .el-icon {
-    margin-left: 5px;
-  }
-  
-  main {
-    padding: 20px;
-  }
-  </style>
+}
+
+onMounted(() => {
+  fetchCategories()
+})
+</script>
+
+<style scoped>
+.layout-container {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  font-family: 'Arial', sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 50px;
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: bold;
+  color: #6b48ff;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.logo:hover {
+  color: #4a2dcc;
+}
+
+.nav-menu {
+  flex-grow: 1;
+  margin-left: 50px;
+  background-color: transparent;
+  border-bottom: none;
+}
+
+.menu-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.sign-in {
+  color: #606266;
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.sign-in:hover {
+  color: #409EFF;
+}
+
+.user-welcome {
+  color: #67c23a;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.user-welcome:hover {
+  color: #85ce61;
+}
+
+.el-icon {
+  margin-left: 5px;
+}
+
+main {
+  padding: 20px;
+}
+</style>

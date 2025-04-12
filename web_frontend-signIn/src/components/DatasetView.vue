@@ -74,7 +74,6 @@
           <div class="dataset-header">
             <el-checkbox
               v-model="selectedDatasets"
-              :label="dataset.filename"
               @change="handleCheckboxChange"
             />
             <h3>{{ dataset.filename }}</h3>

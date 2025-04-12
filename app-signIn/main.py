@@ -67,6 +67,10 @@ class User(BaseModel):
     role: str | None = None
     id: int | None = None
 
+class ChangePassword(BaseModel):
+    current_password: str
+    new_password: str
+
 class UserInDB(User):
     password: str
 
@@ -82,6 +86,8 @@ class CategoriesShowUpdate(BaseModel):
     description: str | None = None
     category: str | None = None
     count: int | None = None
+
+
 
 # Utility Functions
 def verify_password(plain_password: str, hashed_password: str):
@@ -281,6 +287,55 @@ async def login(user: UserLogin):
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+@app.post("/api/change-password")
+async def change_password(
+    password_data: ChangePassword,
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        # Verify current password
+        user = get_user(current_user.username)
+        if not user or not verify_password(password_data.current_password, user.password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect current password"
+            )
+
+        # Validate new password (example: minimum length of 6)
+        if len(password_data.new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be at least 6 characters"
+            )
+
+        # Hash the new password
+        hashed_new_password = get_password_hash(password_data.new_password)
+
+        # Update password in the database
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "UPDATE users SET password = %s WHERE username = %s",
+                    (hashed_new_password, current_user.username)
+                )
+                if cur.rowcount == 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to update password"
+                    )
+
+        logger.info(f"Password changed successfully for user: {current_user.username}")
+        return {"message": "Password changed successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Change password error for user {current_user.username}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error changing password: {str(e)}"
+        )
 
 @app.get("/api/users/me")
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
