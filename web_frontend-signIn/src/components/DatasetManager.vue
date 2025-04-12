@@ -169,22 +169,37 @@
               <span>Upload Dataset</span>
             </div>
           </template>
-          <el-upload
-            drag
-            :http-request="handleUpload"
-            accept=".zip,.tar.gz"
-            :multiple="false"
-          >
-            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-            <div class="el-upload__text">
-              Drop file here or <em>click to upload</em>
-            </div>
-            <template #tip>
-              <div class="el-upload__tip">
-                Only .zip or .tar.gz files are supported
-              </div>
-            </template>
-          </el-upload>
+          <el-form :model="uploadForm" label-position="top">
+            <el-form-item label="Category" required>
+              <el-input v-model="uploadForm.category" placeholder="Enter category (e.g., plane)" />
+            </el-form-item>
+            <el-form-item label="Description">
+              <el-input
+                v-model="uploadForm.description"
+                type="textarea"
+                :rows="4"
+                placeholder="Enter description"
+              />
+            </el-form-item>
+            <el-form-item label="File">
+              <el-upload
+                drag
+                :http-request="handleUpload"
+                accept=".zip,.tar.gz"
+                :multiple="false"
+              >
+                <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+                <div class="el-upload__text">
+                  Drop file here or <em>click to upload</em>
+                </div>
+                <template #tip>
+                  <div class="el-upload__tip">
+                    Only .zip or .tar.gz files are supported
+                  </div>
+                </template>
+              </el-upload>
+            </el-form-item>
+          </el-form>
           <div v-if="uploadStore.isUploading" class="upload-status">
             <el-progress 
               :percentage="uploadStore.uploadProgress" 
@@ -390,6 +405,10 @@ const descriptionDialogVisible = ref(false)
 const currentDescriptionForm = ref({ description: '' })
 
 const uploadStore = useUploadStore()
+const uploadForm = ref({
+  category: '',
+  description: ''
+})
 
 const rules = {
   category: [
@@ -434,7 +453,8 @@ const fetchDatasets = async () => {
     loading.value = true
     const params = {
       page: currentPage.value,
-      page_size: pageSize.value
+      page_size: pageSize.value,
+      uploader_type: 'admin' // 添加此参数以只获取Admin数据
     }
     if (searchQuery.value) {
       params.filename_filter = searchQuery.value
@@ -482,17 +502,31 @@ const fetchCategoriesShow = async () => {
   }
 }
 
-// 处理文件上传并显示进度和速率
 const handleUpload = async (options) => {
   const file = options.file
   const formData = new FormData()
   formData.append('file', file)
+  formData.append('category', uploadForm.value.category)
+  formData.append('description', uploadForm.value.description || '')
+
+  if (!authStore.token) {
+    ElMessage.error('Please login to upload datasets')
+    return
+  }
+
+  if (!uploadForm.value.category) {
+    ElMessage.error('Category is required')
+    return
+  }
 
   try {
     uploadStore.startUpload()
 
     const config = {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${authStore.token}`
+      },
       signal: uploadStore.controller.signal,
       onUploadProgress: (progressEvent) => {
         const { loaded, total } = progressEvent
@@ -502,10 +536,16 @@ const handleUpload = async (options) => {
 
     await axios.post('/api/upload', formData, config)
     ElMessage.success('Upload successful')
+    uploadForm.value.category = '' // 清空表单
+    uploadForm.value.description = ''
     fetchDatasets()
   } catch (error) {
     if (error.name === 'AbortError') {
       ElMessage.info('Upload canceled')
+    } else if (error.response?.status === 401) {
+      ElMessage.error('Session expired, please login again')
+      authStore.logout()
+      window.location.href = '/'
     } else {
       ElMessage.error(error.response?.data?.detail || 'Upload failed: ' + error.message)
     }
@@ -572,6 +612,12 @@ const submitNewCategory = async () => {
     ElMessage.error('Category count must be an integer')
     return
   }
+
+  if (!authStore.token) {
+    ElMessage.error('Please login to add categories')
+    return
+  }
+
   const formData = new FormData()
   newCategory.value.images.forEach((image) => {
     formData.append('images', image.file)
@@ -583,14 +629,25 @@ const submitNewCategory = async () => {
   try {
     submitting.value = true
     await axios.post('/api/categories_show', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${authStore.token}` // 添加 Authorization 头
+      }
     })
     ElMessage.success('Category added successfully')
     newCategory.value = { images: [], description: '', category: '', count: null }
     fetchCategoriesShow()
   } catch (error) {
-    const errorMsg = error.response?.data?.detail || 'Failed to add category: ' + error.message
-    ElMessage.error(errorMsg)
+    if (error.response?.status === 401) {
+      ElMessage.error('Session expired, please login again')
+      authStore.logout()
+      window.location.href = '/'
+    } else if (error.response?.status === 403) {
+      ElMessage.error('Admin privileges required to add categories')
+    } else {
+      const errorMsg = error.response?.data?.detail || 'Failed to add category: ' + error.message
+      ElMessage.error(errorMsg)
+    }
   } finally {
     submitting.value = false
   }
@@ -785,7 +842,12 @@ const truncate = (text, length) => {
 }
 
 onMounted(() => {
-  fetchDatasets()
+  if (!authStore.currentUser || !authStore.token) {
+    ElMessage.error('Please login to manage datasets')
+    window.location.href = '/'
+  } else {
+    fetchDatasets()
+  }
 })
 
 const switchToCategories = () => {

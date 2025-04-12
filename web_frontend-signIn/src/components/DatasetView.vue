@@ -1,6 +1,5 @@
 <template>
   <div class="plane-dataset-container">
-    <!-- 数据集标题和描述 -->
     <div class="dataset-section">
       <h1>
         <Icon :icon="categoryIcon" class="category-icon" />
@@ -9,24 +8,22 @@
       <p v-if="categoryDescription">{{ categoryDescription }}</p>
     </div>
 
-    <!-- 样本图片 -->
     <div class="sample-images" v-if="sampleImages.length > 0">
       <h2>Sample Images</h2>
       <div class="image-grid">
-        <img 
-          v-for="(image, index) in sampleImages" 
-          :key="index" 
-          :src="getImageUrl(image)" 
-          :alt="`Sample ${formattedCategory} ${index + 1}`" 
+        <img
+          v-for="(image, index) in sampleImages"
+          :key="index"
+          :src="getImageUrl(image)"
+          :alt="`Sample ${formattedCategory} ${index + 1}`"
           @error="handleImageError"
         />
       </div>
     </div>
 
-    <!-- 数据集列表 -->
     <div class="download-list">
       <h2>Available Datasets for Download</h2>
-      
+
       <div v-if="loading" class="loading">Loading datasets...</div>
       <div v-else-if="datasets.length === 0" class="no-data">No datasets available</div>
       <div v-else class="download-items">
@@ -38,15 +35,34 @@
             @keyup.enter="searchDatasets"
             class="search-input"
           />
+          <el-select
+            v-model="uploaderType"
+            placeholder="Uploader Type"
+            class="search-input"
+            @change="searchDatasets"
+          >
+            <el-option label="All" value="all" />
+            <el-option label="Admin" value="admin" />
+            <el-option label="User" value="user" />
+          </el-select>
+          <el-autocomplete
+            v-model="usernameQuery"
+            :fetch-suggestions="queryUsernames"
+            placeholder="Search by username"
+            clearable
+            :disabled="uploaderType !== 'user'"
+            @select="searchDatasets"
+            class="search-input"
+          />
           <el-button type="primary" @click="searchDatasets" class="search-button">
             Search
           </el-button>
         </div>
 
         <div class="download-items-header">
-          <el-button 
+          <el-button
             v-if="selectedDatasets.length > 0"
-            type="success" 
+            type="success"
             @click="exportSelectedPaths"
             class="export-button"
           >
@@ -54,45 +70,45 @@
           </el-button>
         </div>
 
-        <div v-for="dataset in datasets" :key="dataset.filename" class="download-item">
+        <div v-for="dataset in datasets" :key="dataset.id" class="download-item">
           <div class="dataset-header">
-            <el-checkbox 
-              v-model="selectedDatasets" 
+            <el-checkbox
+              v-model="selectedDatasets"
               :label="dataset.filename"
               @change="handleCheckboxChange"
             />
             <h3>{{ dataset.filename }}</h3>
           </div>
-
           <div class="description-container">
-            <p 
-              :class="{ 'description-collapsed': !expandedDescriptions[dataset.filename] }"
+            <p
+              :class="{ 'description-collapsed': !expandedDescriptions[dataset.id] }"
               ref="descriptionText"
             >
               {{ dataset.description || 'No description available' }}
             </p>
-            <el-button 
-              v-if="isDescriptionLong(dataset.filename)"
-              type="text" 
-              @click="toggleDescription(dataset.filename)"
+            <el-button
+              v-if="isDescriptionLong(dataset.id)"
+              type="text"
+              @click="toggleDescription(dataset.id)"
               class="more-button"
             >
-              {{ expandedDescriptions[dataset.filename] ? 'Less' : 'More' }}
+              {{ expandedDescriptions[dataset.id] ? 'Less' : 'More' }}
             </el-button>
           </div>
-          <p><strong>Categories:</strong> {{ dataset.categories || 'Not specified' }}</p>
+          <p><strong>Category:</strong> {{ dataset.category || 'Not specified' }}</p>
           <p><strong>Size:</strong> {{ formatSize(dataset.size) }}</p>
-          <el-button 
-            type="primary" 
-            @click="currentUser ? downloadDataset(dataset.filename) : showLoginPrompt()"
+          <p><strong>Uploader:</strong> {{ dataset.uploader_type === 'admin' ? 'Admin' : dataset.uploader_name }}</p>
+          <p><strong>Upload Date:</strong> {{ formatDate(dataset.upload_date) }}</p>
+          <el-button
+            type="primary"
+            @click="currentUser ? downloadDataset(dataset.id) : showLoginPrompt()"
             class="download-button"
           >
             Download
           </el-button>
         </div>
       </div>
-      
-      <!-- 分页控制 -->
+
       <el-pagination
         v-if="total > 0"
         v-model:current-page="currentPage"
@@ -106,7 +122,6 @@
       />
     </div>
 
-    <!-- 回到顶部按钮 -->
     <el-button
       v-if="showBackToTop"
       class="back-to-top"
@@ -136,18 +151,18 @@ const datasets = ref([])
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const totalDatasets = ref(0)
 const categoryDescription = ref('')
 const loading = ref(false)
 const sampleImages = ref([])
 const expandedDescriptions = ref({})
 const selectedDatasets = ref([])
 const searchQuery = ref('')
+const uploaderType = ref('all')
+const usernameQuery = ref('')
 const showBackToTop = ref(false)
 
 const currentUser = computed(() => authStore.currentUser)
 
-// 计算属性
 const formattedCategory = computed(() => {
   return category.value.charAt(0).toUpperCase() + category.value.slice(1)
 })
@@ -156,17 +171,18 @@ const categoryIcon = computed(() => {
   return getCategoryIcon(category.value)
 })
 
-// 获取完整的图片URL
 const getImageUrl = (filename) => {
-  return `/category_images/${filename}`
-}
+  // 避免重复添加前缀
+  if (filename.startsWith('/category_images/')) {
+    return filename;
+  }
+  return `/category_images/${filename}`;
+};
 
-// 图片加载失败处理
 const handleImageError = (event) => {
   event.target.src = '@/assets/00214.jpg'
 }
 
-// 滚动到顶部
 const scrollToTop = () => {
   window.scrollTo({
     top: 0,
@@ -174,39 +190,33 @@ const scrollToTop = () => {
   })
 }
 
-// 监听滚动事件
 const handleScroll = () => {
   showBackToTop.value = window.scrollY > 300
 }
 
-// 判断描述是否过长（例如超过100个字符）
-const isDescriptionLong = (filename) => {
-  const dataset = datasets.value.find(d => d.filename === filename)
+const isDescriptionLong = (datasetId) => {
+  const dataset = datasets.value.find(d => d.id === datasetId)
   if (!dataset || !dataset.description) return false
   return dataset.description.length > 100
 }
 
-// 切换描述的展开/收起状态
-const toggleDescription = (filename) => {
-  expandedDescriptions.value[filename] = !expandedDescriptions.value[filename]
+const toggleDescription = (datasetId) => {
+  expandedDescriptions.value[datasetId] = !expandedDescriptions.value[datasetId]
 }
 
-// 处理复选框变化
 const handleCheckboxChange = () => {
   console.log('Selected datasets:', selectedDatasets.value)
 }
 
-// 导出选中的文件路径
 const exportSelectedPaths = () => {
   if (selectedDatasets.value.length === 0) {
     ElMessage.warning('Please select at least one dataset to export')
     return
   }
-
-  const content = selectedDatasets.value
-    .map(filename => `/datasets/${filename}`)
+  const content = datasets.value
+    .filter(dataset => selectedDatasets.value.includes(dataset.id))
+    .map(dataset => dataset.path)
     .join('\n')
-  
   const blob = new Blob([content], { type: 'text/plain' })
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -216,11 +226,30 @@ const exportSelectedPaths = () => {
   link.click()
   document.body.removeChild(link)
   window.URL.revokeObjectURL(url)
-  
   ElMessage.success('File paths exported successfully')
 }
 
-// 获取数据集（支持搜索）
+const queryUsernames = async (queryString, cb) => {
+  if (!queryString) {
+    cb([])
+    return
+  }
+  try {
+    const response = await axios.get('/api/users/search', {
+      params: { query: queryString },
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
+    const results = response.data.map(user => ({
+      value: user.username,
+      id: user.id
+    }))
+    cb(results)
+  } catch (error) {
+    ElMessage.error('Failed to search usernames')
+    cb([])
+  }
+}
+
 const fetchDatasets = async () => {
   loading.value = true
   try {
@@ -232,6 +261,12 @@ const fetchDatasets = async () => {
     if (searchQuery.value) {
       params.filename_filter = searchQuery.value
     }
+    if (uploaderType.value) {
+      params.uploader_type = uploaderType.value
+    }
+    if (usernameQuery.value && uploaderType.value === 'user') {
+      params.username_filter = usernameQuery.value
+    }
 
     const [datasetsRes, categoryRes] = await Promise.all([
       axios.get('/api/datasets', { params }),
@@ -239,14 +274,13 @@ const fetchDatasets = async () => {
         params: { category: category.value }
       })
     ])
-    
+
     datasets.value = datasetsRes.data.datasets
-    totalDatasets.value = datasetsRes.data.total
     total.value = datasetsRes.data.total
-    
+
     expandedDescriptions.value = {}
     datasets.value.forEach(dataset => {
-      expandedDescriptions.value[dataset.filename] = false
+      expandedDescriptions.value[dataset.id] = false
     })
 
     const matchingCategory = categoryRes.data.categories_show.find(
@@ -260,19 +294,17 @@ const fetchDatasets = async () => {
       sampleImages.value = []
     }
   } catch (error) {
-    console.error('Failed to fetch data:', error)
+    ElMessage.error('Failed to fetch datasets: ' + (error.response?.data?.detail || error.message))
   } finally {
     loading.value = false
   }
 }
 
-// 搜索数据集
 const searchDatasets = () => {
   currentPage.value = 1
   fetchDatasets()
 }
 
-// 图标映射
 const getCategoryIcon = (category) => {
   const iconMap = {
     plane: 'mdi:airplane',
@@ -284,46 +316,44 @@ const getCategoryIcon = (category) => {
   return iconMap[category.toLowerCase()] || 'mdi:database'
 }
 
-// 格式化文件大小
 const formatSize = (bytes) => {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
-// 显示登录提示
+const formatDate = (date) => {
+  return new Date(date).toLocaleString()
+}
+
 const showLoginPrompt = () => {
   ElMessage({
     message: 'Please login to download datasets',
     type: 'warning',
     duration: 3000
   })
-  router.push('/') // 跳转到首页，登录对话框由 Layout.vue 处理
+  router.push('/')
 }
 
-// 下载数据集
-const downloadDataset = (filename) => {
+const downloadDataset = (datasetId) => {
   if (!currentUser.value) {
     showLoginPrompt()
     return
   }
-  window.location.href = `/api/download/${filename}`
+  window.location.href = `/api/download/${datasetId}`
 }
 
-// 分页大小变化
 const handleSizeChange = (newSize) => {
   pageSize.value = newSize
   currentPage.value = 1
   fetchDatasets()
 }
 
-// 分页页码变化
 const handlePageChange = (newPage) => {
   currentPage.value = newPage
   fetchDatasets()
 }
 
-// 监听路由参数变化
 watch(
   () => route.params.category,
   (newCategory) => {
@@ -406,10 +436,6 @@ onUnmounted(() => {
   object-fit: cover;
   border-radius: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.image-grid img:only-child {
-  flex: 0 0 auto;
 }
 
 .download-list {
@@ -505,10 +531,7 @@ onUnmounted(() => {
 
 .description-collapsed {
   display: -webkit-box;
-  display: box;
   -webkit-box-orient: vertical;
-  box-orient: vertical;
-  -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -549,7 +572,7 @@ onUnmounted(() => {
 }
 
 .search-input {
-  width: 300px;
+  width: 200px;
 }
 
 .search-button {
