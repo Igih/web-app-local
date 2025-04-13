@@ -423,7 +423,7 @@ async def read_users_me(current_user: User = Depends(get_current_active_user)):
     return current_user
 
 @app.get("/api/users/search")
-async def search_users(query: str = Query(None), current_user: User = Depends(admin_required)):
+async def search_users(query: str = Query(None), current_user: User = Depends(get_current_active_user)):
     try:
         with db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
