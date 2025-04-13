@@ -69,6 +69,14 @@
           >
             Export File Paths
           </el-button>
+          <el-button
+            v-if="selectedDatasets.length > 0"
+            type="warning"
+            @click="selectedDatasets = []"
+            class="clear-button"
+          >
+            Clear Selections
+          </el-button>
         </div>
 
         <div v-for="dataset in datasets" :key="dataset.id" class="download-item">
@@ -76,7 +84,6 @@
             <el-checkbox
               v-model="selectedDatasets"
               :value="dataset.id"
-              @change="handleCheckboxChange(dataset.id)"
             />
             <h3>{{ dataset.filename }}</h3>
           </div>
@@ -114,7 +121,7 @@
         v-if="total > 0"
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
-        :page-sizes="[10, 20, 50, 100]"
+        :page-sizes="[5, 10, 20, 50, 100]"
         :total="total"
         layout="total, sizes, prev, pager, next, jumper"
         @current-change="handlePageChange"
@@ -155,8 +162,9 @@ const total = ref(0)
 const categoryDescription = ref('')
 const loading = ref(false)
 const sampleImages = ref([])
-const expandedDescriptions = ref({})
-const selectedDatasets = ref([])
+const expandedDescriptions = ref([])
+const selectedDatasets = ref([]) // Stores dataset IDs across all pages
+const selectedDatasetPaths = ref([]) // Stores paths of selected datasets
 const searchQuery = ref('')
 const uploaderType = ref('all')
 const usernameQuery = ref('')
@@ -173,12 +181,11 @@ const categoryIcon = computed(() => {
 })
 
 const getImageUrl = (filename) => {
-  // 避免重复添加前缀
   if (filename.startsWith('/category_images/')) {
-    return filename;
+    return filename
   }
-  return `/category_images/${filename}`;
-};
+  return `/category_images/${filename}`
+}
 
 const handleImageError = (event) => {
   event.target.src = '@/assets/00214.jpg'
@@ -196,7 +203,7 @@ const handleScroll = () => {
 }
 
 const isDescriptionLong = (datasetId) => {
-  const dataset = datasets.value.find(d => d.id === datasetId)
+  const dataset = datasets.value.find((d) => d.id === datasetId)
   if (!dataset || !dataset.description) return false
   return dataset.description.length > 100
 }
@@ -205,38 +212,54 @@ const toggleDescription = (datasetId) => {
   expandedDescriptions.value[datasetId] = !expandedDescriptions.value[datasetId]
 }
 
-const handleCheckboxChange = (datasetId) => {
-  console.log('Selected datasets:', selectedDatasets.value);
-};
+// Watch selectedDatasets to update selectedDatasetPaths
+watch(selectedDatasets, (newSelection) => {
+  // Map selected dataset IDs to their paths
+  selectedDatasetPaths.value = datasets.value
+    .filter((dataset) => newSelection.includes(dataset.id))
+    .map((dataset) => dataset.path)
+    .filter((path) => path) // Ensure no undefined paths
+})
 
-const exportSelectedPaths = () => {
+const exportSelectedPaths = async () => {
   if (!currentUser.value) {
-    showLoginPrompt();
-    return;
+    showLoginPrompt()
+    return
   }
   if (selectedDatasets.value.length === 0) {
-    ElMessage.warning('Please select at least one dataset to export');
-    return;
+    ElMessage.warning('Please select at least one dataset to export')
+    return
   }
-  const selectedPaths = datasets.value
-    .filter(dataset => selectedDatasets.value.includes(dataset.id))
-    .map(dataset => dataset.path);
-  if (selectedPaths.length === 0) {
-    ElMessage.warning('No valid paths found for selected datasets');
-    return;
+  try {
+    // Fetch paths for all selected dataset IDs
+    const response = await axios.post(
+      '/api/datasets/paths',
+      selectedDatasets.value,
+      {
+        headers: { Authorization: `Bearer ${authStore.token}` },
+      }
+    )
+    const paths = response.data.paths
+    if (paths.length === 0) {
+      ElMessage.warning('No valid paths found for selected datasets')
+      return
+    }
+    // Export paths to a text file
+    const content = paths.join('\n')
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `dataset_paths_${new Date().toISOString().slice(0, 10)}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('File paths exported successfully')
+  } catch (error) {
+    ElMessage.error('Failed to export file paths: ' + (error.response?.data?.detail || error.message))
   }
-  const content = selectedPaths.join('\n');
-  const blob = new Blob([content], { type: 'text/plain' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `dataset_paths_${new Date().toISOString().slice(0, 10)}.txt`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
-  ElMessage.success('File paths exported successfully');
-};
+}
 
 const queryUsernames = async (queryString, cb) => {
   if (!queryString) {
@@ -246,11 +269,11 @@ const queryUsernames = async (queryString, cb) => {
   try {
     const response = await axios.get('/api/users/search', {
       params: { query: queryString },
-      headers: { Authorization: `Bearer ${authStore.token}` }
+      headers: { Authorization: `Bearer ${authStore.token}` },
     })
-    const results = response.data.map(user => ({
+    const results = response.data.map((user) => ({
       value: user.username,
-      id: user.id
+      id: user.id,
     }))
     cb(results)
   } catch (error) {
@@ -265,7 +288,7 @@ const fetchDatasets = async () => {
     const params = {
       category_filter: category.value,
       page: currentPage.value,
-      page_size: pageSize.value
+      page_size: pageSize.value,
     }
     if (searchQuery.value) {
       params.filename_filter = searchQuery.value
@@ -280,20 +303,20 @@ const fetchDatasets = async () => {
     const [datasetsRes, categoryRes] = await Promise.all([
       axios.get('/api/datasets', { params }),
       axios.get('/api/categories_show', {
-        params: { category: category.value }
-      })
+        params: { category: category.value },
+      }),
     ])
 
     datasets.value = datasetsRes.data.datasets
     total.value = datasetsRes.data.total
 
-    expandedDescriptions.value = {}
-    datasets.value.forEach(dataset => {
+    expandedDescriptions.value = []
+    datasets.value.forEach((dataset) => {
       expandedDescriptions.value[dataset.id] = false
     })
 
     const matchingCategory = categoryRes.data.categories_show.find(
-      cat => cat.category.toLowerCase() === category.value.toLowerCase()
+      (cat) => cat.category.toLowerCase() === category.value.toLowerCase()
     )
     if (matchingCategory) {
       categoryDescription.value = matchingCategory.description
@@ -302,8 +325,17 @@ const fetchDatasets = async () => {
       categoryDescription.value = ''
       sampleImages.value = []
     }
+
+    // Update selectedDatasetPaths based on current selections
+    selectedDatasetPaths.value = datasets.value
+      .filter((dataset) => selectedDatasets.value.includes(dataset.id))
+      .map((dataset) => dataset.path)
+      .filter((path) => path)
   } catch (error) {
-    ElMessage.error('Failed to fetch datasets: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error(
+      'Failed to fetch datasets: ' +
+        (error.response?.data?.detail || error.message)
+    )
   } finally {
     loading.value = false
   }
@@ -311,6 +343,7 @@ const fetchDatasets = async () => {
 
 const searchDatasets = () => {
   currentPage.value = 1
+  selectedDatasets.value = [] // Clear selections on new search
   fetchDatasets()
 }
 
@@ -339,7 +372,7 @@ const showLoginPrompt = () => {
   ElMessage({
     message: 'Please login to download datasets',
     type: 'warning',
-    duration: 3000
+    duration: 3000,
   })
   router.push('/')
 }
@@ -368,6 +401,8 @@ watch(
   (newCategory) => {
     category.value = newCategory
     currentPage.value = 1
+    selectedDatasets.value = []
+    selectedDatasetPaths.value = []
     fetchDatasets()
   },
   { immediate: true }
@@ -611,7 +646,7 @@ onUnmounted(() => {
 .dataset-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 10px; /* 控制复选框和文件名之间的间距 */
   margin-bottom: 10px;
   width: 100%;
 }

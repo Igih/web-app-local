@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Form, Depends, status
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Form, Depends, status, Body
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -619,6 +619,29 @@ async def list_datasets(
         }
     except Exception as e:
         logger.error(f"Fetch datasets error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.post("/api/datasets/paths")
+async def get_dataset_paths(
+    dataset_ids: list[int] = Body(...),
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        with db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id, path
+                    FROM datasets
+                    WHERE id = ANY(%s)
+                    """,
+                    (dataset_ids,)
+                )
+                datasets = cur.fetchall()
+                paths = [dataset['path'] for dataset in datasets if dataset['path']]
+                return {"paths": paths}
+    except Exception as e:
+        logger.error(f"Fetch dataset paths error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/api/my-datasets")
