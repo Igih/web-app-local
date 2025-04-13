@@ -87,6 +87,10 @@ class CategoriesShowUpdate(BaseModel):
     category: str | None = None
     count: int | None = None
 
+class CreateUser(BaseModel):
+    username: str
+    password: str
+    role: str
 
 
 # Utility Functions
@@ -287,6 +291,82 @@ async def login(user: UserLogin):
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+@app.post("/api/create-user")
+async def create_user(
+    user: CreateUser,
+    current_user: User = Depends(admin_required)
+):
+    try:
+        # Validate input
+        if len(user.username) > 50:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username must not exceed 50 characters"
+            )
+        if len(user.password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 6 characters"
+            )
+        if user.role not in ["admin", "user"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Role must be 'admin' or 'user'"
+            )
+
+        # Check for duplicate username
+        with db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT username FROM users WHERE username = %s",
+                    (user.username,)
+                )
+                if cur.fetchone():
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Username already exists"
+                    )
+
+        # Hash the password
+        hashed_password = get_password_hash(user.password)
+
+        # Insert new user
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users (username, password, role)
+                    VALUES (%s, %s, %s)
+                    RETURNING id, username, role
+                    """,
+                    (user.username, hashed_password, user.role)
+                )
+                new_user = cur.fetchone()
+                if not new_user:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to create user"
+                    )
+
+        logger.info(f"Created user: {user.username} by admin: {current_user.username}")
+        return {
+            "message": "User created successfully",
+            "user": {
+                "id": new_user["id"],
+                "username": new_user["username"],
+                "role": new_user["role"]
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create user error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating user: {str(e)}"
+        )
 
 @app.post("/api/change-password")
 async def change_password(

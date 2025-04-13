@@ -24,41 +24,42 @@
     <div class="download-list">
       <h2>Available Datasets for Download</h2>
 
+      <!-- Moved search-container here -->
+      <div class="search-container">
+        <el-input
+          v-model="searchQuery"
+          placeholder="Search by filename..."
+          clearable
+          @keyup.enter="searchDatasets"
+          class="search-input search-input-filename"
+        />
+        <el-select
+          v-model="uploaderType"
+          placeholder="Uploader Type"
+          class="search-input search-input-uploader"
+          @change="searchDatasets"
+        >
+          <el-option label="All" value="all" />
+          <el-option label="Admin" value="admin" />
+          <el-option label="User" value="user" />
+        </el-select>
+        <el-autocomplete
+          v-model="usernameQuery"
+          :fetch-suggestions="queryUsernames"
+          placeholder="Search by username"
+          clearable
+          :disabled="uploaderType !== 'user'"
+          @select="searchDatasets"
+          class="search-input search-input-username"
+        />
+        <el-button type="primary" @click="searchDatasets" class="search-button">
+          Search
+        </el-button>
+      </div>
+
       <div v-if="loading" class="loading">Loading datasets...</div>
       <div v-else-if="datasets.length === 0" class="no-data">No datasets available</div>
       <div v-else class="download-items">
-        <div class="search-container">
-          <el-input
-            v-model="searchQuery"
-            placeholder="Search by filename..."
-            clearable
-            @keyup.enter="searchDatasets"
-            class="search-input"
-          />
-          <el-select
-            v-model="uploaderType"
-            placeholder="Uploader Type"
-            class="search-input"
-            @change="searchDatasets"
-          >
-            <el-option label="All" value="all" />
-            <el-option label="Admin" value="admin" />
-            <el-option label="User" value="user" />
-          </el-select>
-          <el-autocomplete
-            v-model="usernameQuery"
-            :fetch-suggestions="queryUsernames"
-            placeholder="Search by username"
-            clearable
-            :disabled="uploaderType !== 'user'"
-            @select="searchDatasets"
-            class="search-input"
-          />
-          <el-button type="primary" @click="searchDatasets" class="search-button">
-            Search
-          </el-button>
-        </div>
-
         <div class="download-items-header">
           <el-button
             v-if="selectedDatasets.length > 0"
@@ -74,7 +75,8 @@
           <div class="dataset-header">
             <el-checkbox
               v-model="selectedDatasets"
-              @change="handleCheckboxChange"
+              :value="dataset.id"
+              @change="handleCheckboxChange(dataset.id)"
             />
             <h3>{{ dataset.filename }}</h3>
           </div>
@@ -203,30 +205,38 @@ const toggleDescription = (datasetId) => {
   expandedDescriptions.value[datasetId] = !expandedDescriptions.value[datasetId]
 }
 
-const handleCheckboxChange = () => {
-  console.log('Selected datasets:', selectedDatasets.value)
-}
+const handleCheckboxChange = (datasetId) => {
+  console.log('Selected datasets:', selectedDatasets.value);
+};
 
 const exportSelectedPaths = () => {
-  if (selectedDatasets.value.length === 0) {
-    ElMessage.warning('Please select at least one dataset to export')
-    return
+  if (!currentUser.value) {
+    showLoginPrompt();
+    return;
   }
-  const content = datasets.value
+  if (selectedDatasets.value.length === 0) {
+    ElMessage.warning('Please select at least one dataset to export');
+    return;
+  }
+  const selectedPaths = datasets.value
     .filter(dataset => selectedDatasets.value.includes(dataset.id))
-    .map(dataset => dataset.path)
-    .join('\n')
-  const blob = new Blob([content], { type: 'text/plain' })
-  const url = window.URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `dataset_paths_${new Date().toISOString().slice(0,10)}.txt`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  window.URL.revokeObjectURL(url)
-  ElMessage.success('File paths exported successfully')
-}
+    .map(dataset => dataset.path);
+  if (selectedPaths.length === 0) {
+    ElMessage.warning('No valid paths found for selected datasets');
+    return;
+  }
+  const content = selectedPaths.join('\n');
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `dataset_paths_${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+  ElMessage.success('File paths exported successfully');
+};
 
 const queryUsernames = async (queryString, cb) => {
   if (!queryString) {
@@ -445,7 +455,7 @@ onUnmounted(() => {
 .download-list h2 {
   font-size: 32px;
   color: #1f2a44;
-  margin-bottom: 30px;
+  margin-bottom: 20px; /* Reduced margin to bring search closer */
 }
 
 .download-items {
@@ -565,13 +575,28 @@ onUnmounted(() => {
 }
 
 .search-container {
+  width: 660px; /* Adjusted to accommodate new widths */
   display: flex;
   align-items: center;
   gap: 10px;
+  margin: 0 auto 30px; /* Center and add spacing below */
 }
 
 .search-input {
-  width: 200px;
+  /* Base class for shared styles */
+}
+
+/* Specific widths for each input */
+.search-input-filename {
+  width: 300px; /* Increased width for filename search */
+}
+
+.search-input-uploader {
+  width: 200px; /* Kept the same for uploader type */
+}
+
+.search-input-username {
+  width: 150px; /* Decreased width for username search */
 }
 
 .search-button {

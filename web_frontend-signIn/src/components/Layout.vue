@@ -59,7 +59,7 @@
           @click="goToUserDatasetManager"
           v-if="authStore.currentUser && authStore.currentUser.role === 'user'"
         >
-          <Icon icon="mdi:account-data" class="menu-icon" />
+          <Icon icon="mdi:database" class="menu-icon" />
           <span>My Data</span>
         </el-menu-item>
         <el-menu-item 
@@ -78,6 +78,12 @@
           </span>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item 
+                v-if="authStore.currentUser && authStore.currentUser.role === 'admin'" 
+                command="create-user"
+              >
+                Create User
+              </el-dropdown-item>
               <el-dropdown-item command="change-password">Change Password</el-dropdown-item>
               <el-dropdown-item command="logout">Logout</el-dropdown-item>
             </el-dropdown-menu>
@@ -132,6 +138,33 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 新增用户对话框 -->
+    <el-dialog v-model="createUserDialogVisible" title="Create User" width="30%">
+      <el-form :model="createUserForm" label-width="120px" :rules="createUserRules" ref="createUserFormRef">
+        <el-form-item label="Username" prop="username">
+          <el-input v-model="createUserForm.username" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="Password" prop="password">
+          <el-input v-model="createUserForm.password" type="password" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="Confirm Password" prop="confirmPassword">
+          <el-input v-model="createUserForm.confirmPassword" type="password" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="Role" prop="role">
+          <el-select v-model="createUserForm.role" placeholder="Select role">
+            <el-option label="Admin" value="admin" />
+            <el-option label="User" value="user" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="createUserDialogVisible = false">Cancel</el-button>
+          <el-button type="primary" @click="handleCreateUser">Create</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -150,7 +183,9 @@ const authStore = useAuthStore()
 const categories = ref([])
 const loginDialogVisible = ref(false)
 const changePasswordDialogVisible = ref(false)
+const createUserDialogVisible = ref(false)
 const changePasswordFormRef = ref(null)
+const createUserFormRef = ref(null)
 
 const loginForm = ref({
   username: '',
@@ -161,6 +196,13 @@ const changePasswordForm = ref({
   currentPassword: '',
   newPassword: '',
   confirmPassword: ''
+})
+
+const createUserForm = ref({
+  username: '',
+  password: '',
+  confirmPassword: '',
+  role: ''
 })
 
 const passwordRules = {
@@ -183,6 +225,32 @@ const passwordRules = {
       },
       trigger: 'blur'
     }
+  ]
+}
+
+const createUserRules = {
+  username: [
+    { required: true, message: 'Please enter a username', trigger: 'blur' }
+  ],
+  password: [
+    { required: true, message: 'Please enter a password', trigger: 'blur' },
+    { min: 6, message: 'Password must be at least 6 characters', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: 'Please confirm the password', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (value !== createUserForm.value.password) {
+          callback(new Error('Passwords do not match'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ],
+  role: [
+    { required: true, message: 'Please select a role', trigger: 'change' }
   ]
 }
 
@@ -277,6 +345,27 @@ const handleChangePassword = async () => {
   }
 }
 
+const handleCreateUser = async () => {
+  try {
+    await createUserFormRef.value.validate()
+    const response = await axios.post('/api/create-user', {
+      username: createUserForm.value.username,
+      password: createUserForm.value.password,
+      role: createUserForm.value.role
+    })
+    ElMessage.success('User created successfully')
+    createUserDialogVisible.value = false
+    createUserForm.value = {
+      username: '',
+      password: '',
+      confirmPassword: '',
+      role: ''
+    }
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || 'Failed to create user')
+  }
+}
+
 const handleUserCommand = (command) => {
   if (command === 'logout') {
     authStore.logout()
@@ -284,6 +373,8 @@ const handleUserCommand = (command) => {
     router.push('/')
   } else if (command === 'change-password') {
     changePasswordDialogVisible.value = true
+  } else if (command === 'create-user') {
+    createUserDialogVisible.value = true
   }
 }
 

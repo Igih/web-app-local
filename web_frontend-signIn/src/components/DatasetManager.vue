@@ -1,6 +1,5 @@
 <template>
   <el-container class="app-container">
-    <!-- 添加切换按钮 -->
     <el-header class="sub-header">
       <div class="header-buttons">
         <el-button 
@@ -19,16 +18,97 @@
     </el-header>
     
     <el-main>
-      <!-- Categories Tab (categories_show table) -->
+      <!-- Categories Tab -->
       <div v-if="activeTab === 'categories'">
-        <!-- New Upload Section for categories_show -->
-        <el-card class="upload-card">
+        <el-card class="dataset-card">
           <template #header>
             <div class="card-header">
-              <span>Upload New Category Data</span>
+              <span>Categories Show</span>
+              <div class="header-actions">
+                <el-button type="primary" @click="showNewCategoryDialog">
+                  Upload
+                </el-button>
+                <el-button type="primary" @click="fetchCategoriesShow" :loading="loading">
+                  Refresh
+                </el-button>
+              </div>
             </div>
           </template>
-          <el-form :model="newCategory" label-position="top" :rules="rules" ref="categoryForm">
+          <el-table v-loading="loading" :data="categoriesShow" style="width: 100%">
+            <!-- Existing table columns remain unchanged -->
+            <el-table-column label="Category" width="300">
+              <template #default="scope">
+                <span :title="scope.row.category">{{ truncate(scope.row.category, 20) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="Category Count" width="150">
+              <template #default="scope">
+                <div class="count-cell">
+                  <span>{{ scope.row.count || 0 }}</span>
+                  <el-button 
+                    type="primary" 
+                    size="small" 
+                    @click="showCountDialog(scope.row)"
+                  >
+                    Edit
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="Sample Images" width="300">
+              <template #default="scope">
+                <div v-if="scope.row.images && Array.isArray(scope.row.images) && scope.row.images.length > 0" class="image-thumbnails">
+                  <img 
+                    v-for="(image, index) in scope.row.images.slice(0, 3)" 
+                    :key="index" 
+                    :src="`/category_images/${image}`" 
+                    alt="Thumbnail" 
+                    class="thumbnail"
+                  >
+                  <span v-if="scope.row.images.length > 3" class="more-images">
+                    +{{ scope.row.images.length - 3 }}
+                  </span>
+                </div>
+                <span v-else>未上传图片</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="Description" width="300">
+              <template #default="scope">
+                <div class="description-cell">
+                  <span :title="scope.row.description">{{ truncate(scope.row.description, 20) }}</span>
+                  <el-button 
+                    type="primary" 
+                    size="small" 
+                    @click="showDescriptionDialog(scope.row)"
+                  >
+                    Edit
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="Operations" width="100">
+              <template #default="scope">
+                <el-button type="danger" size="small" @click="deleteCategory(scope.row.id)">
+                  Delete
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+
+        <!-- New Category Upload Dialog -->
+        <el-dialog 
+          title="Upload New Category Data" 
+          v-model="newCategoryDialogVisible" 
+          width="40%"
+          :before-close="handleNewCategoryClose"
+        >
+          <el-form 
+            :model="newCategory" 
+            label-position="top" 
+            :rules="rules" 
+            ref="categoryForm"
+          >
             <el-form-item label="Sample Images (Exactly 1~6 required)">
               <el-upload
                 :file-list="newCategory.images"
@@ -44,9 +124,7 @@
               >
                 <el-button type="primary">Click to upload</el-button>
                 <template #tip>
-                  <div class="el-upload__tip">
-                    Upload up to 6 images
-                  </div>
+                  <div class="el-upload__tip">Upload up to 6 images</div>
                 </template>
               </el-upload>
             </el-form-item>
@@ -87,139 +165,32 @@
                 :min="0"
               />
             </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="submitNewCategory" :loading="submitting">Submit</el-button>
-            </el-form-item>
           </el-form>
-        </el-card>
-
-        <!-- Categories Display -->
-        <el-card class="dataset-card">
-          <template #header>
-            <div class="card-header">
-              <span>Categories Show</span>
-              <el-button type="primary" @click="fetchCategoriesShow" :loading="loading">
-                Refresh
+          <template #footer>
+            <span class="dialog-footer">
+              <el-button @click="newCategoryDialogVisible = false">Cancel</el-button>
+              <el-button 
+                type="primary" 
+                @click="submitNewCategory" 
+                :loading="submitting"
+              >
+                Submit
               </el-button>
-            </div>
+            </span>
           </template>
-          <el-table v-loading="loading" :data="categoriesShow" style="width: 100%">
-            <el-table-column label="Category" width="300">
-              <template #default="scope">
-                <span :title="scope.row.category">{{ truncate(scope.row.category, 20) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="Category Count" width="150">
-              <template #default="scope">
-                <div class="count-cell">
-                  <span>{{ scope.row.count || 0 }}</span>
-                  <el-button 
-                    type="primary" 
-                    size="small" 
-                    @click="showCountDialog(scope.row)"
-                  >
-                    Edit
-                  </el-button>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="Sample Images" width="300">
-              <template #default="scope">
-                <span v-if="scope.row.images && Array.isArray(scope.row.images)">
-                  已上传{{ scope.row.images.length }}张
-                </span>
-                <span v-else-if="scope.row.images">
-                  已上传1张
-                </span>
-                <span v-else>
-                  未上传图片
-                </span>
-              </template>
-            </el-table-column>
-            <el-table-column label="Description" width="300">
-              <template #default="scope">
-                <div class="description-cell">
-                  <span :title="scope.row.description">{{ truncate(scope.row.description, 20) }}</span>
-                  <el-button 
-                    type="primary" 
-                    size="small" 
-                    @click="showDescriptionDialog(scope.row)"
-                  >
-                    Edit
-                  </el-button>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="Operations" width="100">
-              <template #default="scope">
-                <el-button type="danger" size="small" @click="deleteCategory(scope.row.id)">
-                  Delete
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
+        </el-dialog>
       </div>
 
       <!-- Adjustments Tab -->
       <div v-if="activeTab === 'adjustments'">
-        <el-card class="upload-card">
-          <template #header>
-            <div class="card-header">
-              <span>Upload Dataset</span>
-            </div>
-          </template>
-          <el-form :model="uploadForm" label-position="top">
-            <el-form-item label="Category" required>
-              <el-input v-model="uploadForm.category" placeholder="Enter category (e.g., plane)" />
-            </el-form-item>
-            <el-form-item label="Description">
-              <el-input
-                v-model="uploadForm.description"
-                type="textarea"
-                :rows="4"
-                placeholder="Enter description"
-              />
-            </el-form-item>
-            <el-form-item label="File">
-              <el-upload
-                drag
-                :http-request="handleUpload"
-                accept=".zip,.tar.gz"
-                :multiple="false"
-              >
-                <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-                <div class="el-upload__text">
-                  Drop file here or <em>click to upload</em>
-                </div>
-                <template #tip>
-                  <div class="el-upload__tip">
-                    Only .zip or .tar.gz files are supported
-                  </div>
-                </template>
-              </el-upload>
-            </el-form-item>
-          </el-form>
-          <div v-if="uploadStore.isUploading" class="upload-status">
-            <el-progress 
-              :percentage="uploadStore.uploadProgress" 
-              :stroke-width="15" 
-              status="success"
-              striped
-            />
-            <div class="progress-info">
-              <span>{{ uploadStore.uploadProgress }}%</span>
-              <span>{{ uploadStore.uploadSpeed }}</span>
-            </div>
-          </div>
-          <el-button v-if="uploadStore.isUploading" @click="cancelUpload">Cancel Upload</el-button>
-        </el-card>
-
         <el-card class="dataset-card">
           <template #header>
             <div class="card-header">
               <span>Datasets</span>
               <div class="header-actions">
+                <el-button type="primary" @click="showUploadDialog">
+                  Upload
+                </el-button>
                 <el-input
                   v-model="searchQuery"
                   placeholder="Search by filename..."
@@ -237,6 +208,7 @@
             </div>
           </template>
           <el-table v-loading="loading" :data="datasets" style="width: 100%">
+            <!-- Existing table columns remain unchanged -->
             <el-table-column prop="filename" label="File Name" />
             <el-table-column label="Size" width="120">
               <template #default="scope">
@@ -256,7 +228,7 @@
             <el-table-column label="Categories" width="300">
               <template #default="scope">
                 <div class="description-cell">
-                  <span :title="scope.row.categories">{{ truncate(scope.row.categories, 20) }}</span>
+                  <span :title="scope.row.category">{{ truncate(scope.row.category, 20) }}</span>
                   <el-button type="primary" size="small" @click="showCategoriesDialog(scope.row)">
                     Edit
                   </el-button>
@@ -265,7 +237,7 @@
             </el-table-column>
             <el-table-column label="Operations" width="200">
               <template #default="scope">
-                <el-button type="danger" size="small" @click="deleteFile(scope.row.filename)">
+                <el-button type="danger" size="small" @click="deleteFile(scope.row.id, scope.row.filename)">
                   Delete
                 </el-button>
               </template>
@@ -282,9 +254,103 @@
             style="margin-top: 20px; text-align: center;"
           />
         </el-card>
+
+        <!-- Upload Dataset Dialog -->
+        <el-dialog 
+          title="Upload Dataset" 
+          v-model="uploadDialogVisible" 
+          width="40%"
+          :before-close="handleUploadClose"
+        >
+          <el-form 
+            :model="uploadForm" 
+            :rules="uploadRules" 
+            ref="uploadFormRef" 
+            label-position="top"
+            @submit.prevent
+          >
+            <el-form-item label="File" prop="file">
+              <el-upload
+                drag
+                :file-list="uploadForm.file ? [uploadForm.file] : []"
+                :http-request="handleUpload"
+                accept=".zip,.tar.gz"
+                :multiple="false"
+                :on-change="handleFileChange"
+                :on-remove="handleFileRemove"
+                :auto-upload="false"
+                class="wide-upload"
+              >
+                <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+                <div class="el-upload__text">
+                  Drop file here or <em>click to upload</em>
+                </div>
+                <template #tip>
+                  <div class="el-upload__tip">
+                    Only .zip or .tar.gz files are supported
+                  </div>
+                </template>
+              </el-upload>
+            </el-form-item>
+            <el-form-item label="Category" prop="category">
+              <el-select
+                v-model="uploadForm.category"
+                placeholder="Select a category"
+                style="width: 100%"
+                :disabled="categoriesLoading"
+              >
+                <el-option
+                  v-for="item in categoriesList"
+                  :key="item.category"
+                  :label="item.category"
+                  :value="item.category"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="Description">
+              <el-input
+                v-model="uploadForm.description"
+                type="textarea"
+                :rows="4"
+                placeholder="Enter description"
+              />
+            </el-form-item>
+          </el-form>
+          <div v-if="uploadStore.isUploading" class="upload-status">
+            <el-progress 
+              :percentage="uploadStore.uploadProgress" 
+              :stroke-width="15" 
+              status="success"
+              striped
+            />
+            <div class="progress-info">
+              <span>{{ uploadStore.uploadProgress }}%</span>
+              <span>{{ uploadStore.uploadSpeed }}</span>
+            </div>
+          </div>
+          <template #footer>
+            <span class="dialog-footer">
+              <el-button 
+                v-if="uploadStore.isUploading" 
+                @click="cancelUpload"
+              >
+                Cancel Upload
+              </el-button>
+              <el-button @click="uploadDialogVisible = false">Cancel</el-button>
+              <el-button 
+                type="primary"
+                @click="submitUpload"
+                :disabled="!isFormValid || uploadStore.isUploading"
+                :loading="uploadStore.isUploading"
+              >
+                Submit
+              </el-button>
+            </span>
+          </template>
+        </el-dialog>
       </div>
 
-      <!-- Edit Dialogs -->
+      <!-- Existing Dialogs remain unchanged -->
       <el-dialog title="Edit Description" v-model="dialogVisible" width="30%" :before-close="handleClose">
         <el-input v-model="currentDescription" type="textarea" :rows="4" placeholder="Enter description" />
         <template #footer>
@@ -369,7 +435,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted} from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { UploadFilled } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -377,6 +443,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUploadStore } from '@/stores/upload'
 
 const authStore = useAuthStore()
+const uploadStore = useUploadStore()
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -386,17 +453,12 @@ const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const categoriesDialogVisible = ref(false)
+const uploadDialogVisible = ref(false)
+const newCategoryDialogVisible = ref(false)
 const currentDescription = ref('')
 const currentCategory = ref('')
 const currentRow = ref(null)
 const activeTab = ref('adjustments')
-const newCategory = ref({
-  images: [],
-  description: '',
-  category: '',
-  count: null
-})
-const categoryForm = ref(null)
 const searchQuery = ref('')
 const countDialogVisible = ref(false)
 const currentCountForm = ref({ count: null })
@@ -404,11 +466,21 @@ const countForm = ref(null)
 const descriptionDialogVisible = ref(false)
 const currentDescriptionForm = ref({ description: '' })
 
-const uploadStore = useUploadStore()
+const newCategory = ref({
+  images: [],
+  description: '',
+  category: '',
+  count: null
+})
+const categoryForm = ref(null)
 const uploadForm = ref({
+  file: null,
   category: '',
   description: ''
 })
+const uploadFormRef = ref(null)
+const categoriesList = ref([])
+const categoriesLoading = ref(false)
 
 const rules = {
   category: [
@@ -446,6 +518,76 @@ const countRules = {
       trigger: 'blur' 
     }
   ]
+}
+
+const uploadRules = {
+  file: [
+    { required: true, message: 'Please upload a file', trigger: 'change' }
+  ],
+  category: [
+    { required: true, message: 'Please select a category', trigger: 'change' }
+  ]
+}
+
+const isFormValid = computed(() => {
+  return uploadForm.value.file && uploadForm.value.category
+})
+
+const showUploadDialog = () => {
+  uploadDialogVisible.value = true
+  uploadForm.value = { file: null, category: '', description: '' }
+  uploadFormRef.value?.resetFields()
+}
+
+const showNewCategoryDialog = () => {
+  newCategoryDialogVisible.value = true
+  newCategory.value = { images: [], description: '', category: '', count: null }
+  categoryForm.value?.resetFields()
+}
+
+const handleUploadClose = (done) => {
+  ElMessageBox.confirm('Are you sure to close without saving?')
+    .then(() => {
+      uploadForm.value = { file: null, category: '', description: '' }
+      uploadFormRef.value?.resetFields()
+      done()
+    })
+    .catch(() => {})
+}
+
+const handleNewCategoryClose = (done) => {
+  ElMessageBox.confirm('Are you sure to close without saving?')
+    .then(() => {
+      newCategory.value = { images: [], description: '', category: '', count: null }
+      categoryForm.value?.resetFields()
+      done()
+    })
+    .catch(() => {})
+}
+
+const fetchCategoriesForDropdown = async () => {
+  try {
+    categoriesLoading.value = true
+    const response = await axios.get('/api/categories_show')
+    categoriesList.value = response.data.categories_show
+  } catch (error) {
+    ElMessage.error('Failed to fetch categories: ' + (error.message || 'Unknown error'))
+  } finally {
+    categoriesLoading.value = false
+  }
+}
+
+// Handle file selection
+const handleFileChange = (file, fileList) => {
+  if (fileList.length > 1) {
+    fileList.splice(0, fileList.length - 1)
+  }
+  uploadForm.value.file = file.raw
+}
+
+// Handle file removal
+const handleFileRemove = () => {
+  uploadForm.value.file = null
 }
 
 const fetchDatasets = async () => {
@@ -502,20 +644,19 @@ const fetchCategoriesShow = async () => {
   }
 }
 
-const handleUpload = async (options) => {
-  const file = options.file
+const handleUpload = async () => {
+  if (!uploadForm.value.file) {
+    ElMessage.error('No file selected')
+    return
+  }
+
   const formData = new FormData()
-  formData.append('file', file)
+  formData.append('file', uploadForm.value.file)
   formData.append('category', uploadForm.value.category)
   formData.append('description', uploadForm.value.description || '')
 
   if (!authStore.token) {
     ElMessage.error('Please login to upload datasets')
-    return
-  }
-
-  if (!uploadForm.value.category) {
-    ElMessage.error('Category is required')
     return
   }
 
@@ -536,8 +677,10 @@ const handleUpload = async (options) => {
 
     await axios.post('/api/upload', formData, config)
     ElMessage.success('Upload successful')
-    uploadForm.value.category = '' // 清空表单
+    uploadForm.value.file = null
+    uploadForm.value.category = ''
     uploadForm.value.description = ''
+    uploadFormRef.value.resetFields()
     fetchDatasets()
   } catch (error) {
     if (error.name === 'AbortError') {
@@ -551,6 +694,16 @@ const handleUpload = async (options) => {
     }
   } finally {
     uploadStore.finishUpload()
+  }
+}
+
+// Submit upload form
+const submitUpload = async () => {
+  try {
+    await uploadFormRef.value.validate()
+    await handleUpload()
+  } catch (error) {
+    ElMessage.error('Please fix the form errors before submitting')
   }
 }
 
@@ -665,32 +818,6 @@ const handleCountClose = (done) => {
     .catch(() => {})
 }
 
-const submitCount = async () => {
-  try {
-    await countForm.value.validate()
-    const countValue = Number(currentCountForm.value.count)
-    if (!Number.isInteger(countValue)) {
-      ElMessage.error('Count must be an integer')
-      return
-    }
-    submitting.value = true
-    
-    await axios.put(`/api/categories_show/${currentRow.value.id}`, {
-      count: countValue
-    }, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
-    
-    ElMessage.success('Count updated')
-    countDialogVisible.value = false
-    fetchCategoriesShow()
-  } catch (error) {
-    const errorMsg = error.response?.data?.detail || error.message || 'Failed to update count'
-    ElMessage.error(errorMsg)
-  } finally {
-    submitting.value = false
-  }
-}
 
 const showDescriptionDialog = (row) => {
   currentRow.value = row
@@ -717,8 +844,16 @@ const submitDescriptionUpdate = async () => {
     descriptionDialogVisible.value = false
     fetchCategoriesShow()
   } catch (error) {
-    const errorMsg = error.response?.data?.detail || error.message || 'Failed to update description'
-    ElMessage.error(errorMsg)
+    if (error.response?.status === 401) {
+      ElMessage.error('Session expired, please login again')
+      authStore.logout()
+      window.location.href = '/'
+    } else if (error.response?.status === 403) {
+      ElMessage.error('Admin privileges required to update description')
+    } else {
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to update description'
+      ElMessage.error(errorMsg)
+    }
   } finally {
     submitting.value = false
   }
@@ -732,11 +867,19 @@ const deleteCategory = async (id) => {
       type: 'warning'
     })
     loading.value = true
-    await axios.delete(`/api/categories_show/${id}`)
+    await axios.delete(`/api/categories_show/${id}`, {
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
     ElMessage.success('Category deleted successfully')
     fetchCategoriesShow()
   } catch (error) {
-    if (error !== 'cancel') {
+    if (error.response?.status === 401) {
+      ElMessage.error('Session expired, please login again')
+      authStore.logout()
+      window.location.href = '/'
+    } else if (error.response?.status === 403) {
+      ElMessage.error('Admin privileges required to delete categories')
+    } else if (error !== 'cancel') {
       ElMessage.error(error.response?.data?.detail || 'Failed to delete category')
     }
   } finally {
@@ -744,7 +887,44 @@ const deleteCategory = async (id) => {
   }
 }
 
-const deleteFile = async (filename) => {
+const submitCount = async () => {
+  try {
+    await countForm.value.validate()
+    const countValue = Number(currentCountForm.value.count)
+    if (!Number.isInteger(countValue)) {
+      ElMessage.error('Count must be an integer')
+      return
+    }
+    submitting.value = true
+    
+    await axios.put(`/api/categories_show/${currentRow.value.id}`, {
+      count: countValue
+    }, {
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
+    
+    ElMessage.success('Count updated')
+    countDialogVisible.value = false
+    fetchCategoriesShow()
+  } catch (error) {
+    if (error.response?.status === 401) {
+      ElMessage.error('Session expired, please login again')
+      authStore.logout()
+      window.location.href = '/'
+    } else if (error.response?.status === 403) {
+      ElMessage.error('Admin privileges required to update count')
+    } else {
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to update count'
+      ElMessage.error(errorMsg)
+    }
+  } finally {
+    submitting.value = false
+  }
+}
+
+
+
+const deleteFile = async (id, filename) => {
   try {
     await ElMessageBox.confirm(`Are you sure you want to delete ${filename}?`, 'Warning', {
       confirmButtonText: 'Delete',
@@ -752,13 +932,17 @@ const deleteFile = async (filename) => {
       type: 'warning'
     })
     loading.value = true
-    await axios.delete(`/api/datasets/${filename}`, {
+    await axios.delete(`/api/datasets/${id}`, {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
     ElMessage.success('File and associated text file deleted successfully')
     fetchDatasets()
   } catch (error) {
-    if (error !== 'cancel') {
+    if (error.response?.status === 401) {
+      ElMessage.error('Session expired, please login again')
+      authStore.logout()
+      window.location.href = '/'
+    } else if (error !== 'cancel') {
       ElMessage.error(error.response?.data?.detail || 'Failed to delete file')
     }
   } finally {
@@ -774,7 +958,7 @@ const showEditDialog = (row) => {
 
 const showCategoriesDialog = (row) => {
   currentRow.value = row
-  currentCategory.value = row.categories || ''
+  currentCategory.value = row.category || ''
   categoriesDialogVisible.value = true
 }
 
@@ -783,7 +967,7 @@ const submitDescription = async () => {
     submitting.value = true
     const endpoint = activeTab.value === 'categories' 
       ? `/api/categories_show/${currentRow.value.id}` 
-      : `/api/datasets/${currentRow.value.filename}`
+      : `/api/datasets/${currentRow.value.id}`
     await axios.put(endpoint, { description: currentDescription.value }, {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
@@ -791,7 +975,13 @@ const submitDescription = async () => {
     dialogVisible.value = false
     activeTab.value === 'categories' ? fetchCategoriesShow() : fetchDatasets()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || 'Failed to update description')
+    if (error.response?.status === 401) {
+      ElMessage.error('Session expired, please login again')
+      authStore.logout()
+      window.location.href = '/'
+    } else {
+      ElMessage.error(error.response?.data?.detail || 'Failed to update description')
+    }
   } finally {
     submitting.value = false
   }
@@ -800,16 +990,24 @@ const submitDescription = async () => {
 const submitCategory = async () => {
   try {
     submitting.value = true
-    const endpoint = activeTab.value === 'categories' ? `/api/categories_show/${currentRow.value.id}` : `/api/datasets/${currentRow.value.filename}`
+    const endpoint = activeTab.value === 'categories' ? `/api/categories_show/${currentRow.value.id}` : `/api/datasets/${currentRow.value.id}`
     const payload = activeTab.value === 'categories' ? 
       { category: currentCategory.value } : 
-      { categories: currentCategory.value }
-    await axios.put(endpoint, payload)
-    ElMessage.success(activeTab.value === 'categories' ? 'Category updated' : 'Categories updated')
+      { category: currentCategory.value }
+    await axios.put(endpoint, payload, {
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
+    ElMessage.success(activeTab.value === 'categories' ? 'Category updated' : 'Category updated')
     categoriesDialogVisible.value = false
     activeTab.value === 'categories' ? fetchCategoriesShow() : fetchDatasets()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || 'Failed to update ' + (activeTab.value === 'categories' ? 'category' : 'categories'))
+    if (error.response?.status === 401) {
+      ElMessage.error('Session expired, please login again')
+      authStore.logout()
+      window.location.href = '/'
+    } else {
+      ElMessage.error(error.response?.data?.detail || 'Failed to update category')
+    }
   } finally {
     submitting.value = false
   }
@@ -847,6 +1045,7 @@ onMounted(() => {
     window.location.href = '/'
   } else {
     fetchDatasets()
+    fetchCategoriesForDropdown() // Fetch categories on mount
   }
 })
 
@@ -858,6 +1057,7 @@ const switchToCategories = () => {
 const switchToAdjustments = () => {
   activeTab.value = 'adjustments'
   fetchDatasets()
+  fetchCategoriesForDropdown() // Refresh categories when switching to adjustments
 }
 
 // 组件卸载时清理
@@ -1018,5 +1218,50 @@ onUnmounted(() => {
   margin-top: 5px;
   font-size: 14px;
   color: #606266;
+}
+
+.wide-upload {
+  width: 100%;
+  max-width: 600px;
+}
+
+.wide-upload :deep(.el-upload-dragger) {
+  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.wide-upload :deep(.el-upload-dragger .el-icon--upload) {
+  font-size: 50px;
+  margin-bottom: 10px;
+}
+
+.wide-upload :deep(.el-upload__text) {
+  font-size: 16px;
+}
+
+.image-thumbnails {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: center;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.thumbnail {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+.more-images {
+  font-size: 12px;
+  color: #606266;
+  margin-left: 4px;
+  flex-shrink: 0;
 }
 </style>
