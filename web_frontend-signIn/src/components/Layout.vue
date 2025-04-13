@@ -287,6 +287,19 @@ const getCategoryIcon = (category) => {
     ship: 'mdi:ferry',
     tank: 'mdi:tank',
     drone: 'mdi:drone',
+    train: 'mdi:train',
+    bus: 'mdi:bus',
+    bicycle: 'mdi:bicycle',
+    motorcycle: 'mdi:motorbike',
+    helicopter: 'mdi:helicopter',
+    rocket: 'mdi:rocket',
+    submarine: 'mdi:submarine',
+    truck: 'mdi:truck',
+    ambulance: 'mdi:ambulance',
+    firetruck: 'mdi:fire-truck',
+    police: 'mdi:police-car',
+    taxi: 'mdi:taxi',
+    tractor: 'mdi:tractor',
   }
   return iconMap[category.toLowerCase()] || 'mdi:database'
 }

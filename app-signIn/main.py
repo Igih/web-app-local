@@ -504,15 +504,112 @@ async def create_category_show(
         logger.error(f"Create category error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error creating category: {str(e)}")
 
+@app.put("/api/categories_show/{category_id}")
+async def update_category_show(
+    category_id: int,
+    update: CategoriesShowUpdate,
+    current_user: User = Depends(admin_required)
+):
+    try:
+        # Check if the category exists
+        with db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT id FROM categories_show WHERE id = %s",
+                    (category_id,)
+                )
+                category = cur.fetchone()
+                if not category:
+                    raise HTTPException(status_code=404, detail="Category not found")
+
+        # Prepare the fields to update
+        update_fields = []
+        update_values = []
+        if update.description is not None:
+            update_fields.append("description = %s")
+            update_values.append(update.description)
+        if update.category is not None:
+            if len(update.category) > 50:
+                raise HTTPException(status_code=400, detail="Category must not exceed 50 characters")
+            update_fields.append("category = %s")
+            update_values.append(update.category.lower())
+        if update.count is not None:
+            if not isinstance(update.count, int):
+                raise HTTPException(status_code=400, detail="Count must be an integer")
+            update_fields.append("count = %s")
+            update_values.append(update.count)
+
+        if not update_fields:
+            raise HTTPException(status_code=400, detail="No fields to update. Ensure 'description', 'category', or 'count' is provided.")
+
+        update_values.append(category_id)
+        query = f"UPDATE categories_show SET {', '.join(update_fields)} WHERE id = %s"
+
+        # Execute the update
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, tuple(update_values))
+                if cur.rowcount == 0:
+                    raise HTTPException(status_code=404, detail="Category not found after update attempt")
+
+        logger.info(f"Updated category show: {category_id} by user {current_user.username}")
+        return {"message": "Category updated successfully"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Update category show error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating category: {str(e)}")
+
+@app.delete("/api/categories_show/{category_id}")
+async def delete_category_show(
+    category_id: int,
+    current_user: User = Depends(admin_required)
+):
+    try:
+        # Fetch the category and its images
+        with db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT images FROM categories_show WHERE id = %s",
+                    (category_id,)
+                )
+                category = cur.fetchone()
+                if not category:
+                    raise HTTPException(status_code=404, detail="Category not found")
+
+        # Delete the category from the database
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("DELETE FROM categories_show WHERE id = %s", (category_id,))
+                if cur.rowcount == 0:
+                    raise HTTPException(status_code=404, detail="Category not found")
+
+        # Delete associated images from the filesystem
+        image_filenames = category.get('images', [])
+        for image_filename in image_filenames:
+            image_path = os.path.join(IMAGES_DIR, image_filename)
+            if os.path.exists(image_path):
+                os.remove(image_path)
+
+        logger.info(f"Deleted category show: {category_id} by user {current_user.username}")
+        return {"message": "Category deleted successfully"}
+    except Exception as e:
+        logger.error(f"Delete category show error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting category: {str(e)}")
+
 @app.post("/api/upload")
 async def upload_zip(
     file: UploadFile = File(...),
-    category: str = Form(...),
+    category: str = Form("uncategorized"),
     description: str = Form(None),
     current_user: User = Depends(get_current_active_user)
 ):
     if not file.filename.endswith(('.zip', '.tar.gz')):
         raise HTTPException(status_code=400, detail="Only .zip or .tar.gz files are allowed")
+
+    # Validate category length
+    if len(category) > 50:
+        raise HTTPException(status_code=400, detail="Category must not exceed 50 characters")
 
     # Determine storage path based on user role
     if current_user.role == "admin":
@@ -546,9 +643,10 @@ async def upload_zip(
                 )
         shutil.move(temp_path, file_path)
 
-        txt_filename = os.path.splitext(file.filename)[0] + ".txt"
-        txt_file_path = os.path.join(DESCRIPTION_DIR, txt_filename)
-        if description:
+        # Save description to .txt file only for admins (DatasetManager, Data Adjustment)
+        if current_user.role == "admin" and description:
+            txt_filename = os.path.splitext(file.filename)[0] + ".txt"
+            txt_file_path = os.path.join(DESCRIPTION_DIR, txt_filename)
             with open(txt_file_path, "w", encoding="utf-8") as txt_file:
                 txt_file.write(description)
 
@@ -559,7 +657,7 @@ async def upload_zip(
             os.remove(temp_path)
         logger.error(f"Upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
-    
+
 @app.get("/api/datasets")
 async def list_datasets(
     category_filter: str | None = Query(None),
@@ -583,8 +681,9 @@ async def list_datasets(
                 params = []
 
                 if category_filter:
-                    where_clauses.append("LOWER(d.category) = LOWER(%s)")
-                    params.append(category_filter)
+                    # 修改为部分匹配，使用 LIKE
+                    where_clauses.append("LOWER(d.category) LIKE LOWER(%s)")
+                    params.append(f"%{category_filter}%")
                 if filename_filter:
                     where_clauses.append("LOWER(d.filename) LIKE LOWER(%s)")
                     params.append(f"%{filename_filter}%")
@@ -713,32 +812,36 @@ async def update_dataset(
             update_values.append(update.description)
         if update.categories is not None:
             if len(update.categories) > 50:
-                raise HTTPException(status_code=400, detail="Categories must not exceed 50 characters")
+                raise HTTPException(status_code=400, detail="Category must not exceed 50 characters")
             update_fields.append("category = %s")
             update_values.append(update.categories)
         if not update_fields:
-            raise HTTPException(status_code=400, detail="No fields to update")
+            logger.warning(f"No fields to update for dataset {dataset_id}. Payload: {update.dict()}")
+            raise HTTPException(status_code=400, detail="No fields to update. Ensure 'categories' or 'description' is provided.")
 
         update_values.append(dataset_id)
         query = f"UPDATE datasets SET {', '.join(update_fields)} WHERE id = %s"
 
         with db_transaction() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                logger.debug(f"Executing query: {query} with values: {update_values}")
                 cur.execute(query, tuple(update_values))
                 if cur.rowcount == 0:
-                    raise HTTPException(status_code=404, detail="Dataset not found")
+                    raise HTTPException(status_code=404, detail="Dataset not found after update attempt")
 
-        txt_filename = os.path.splitext(dataset['filename'])[0] + ".txt"
-        txt_file_path = os.path.join(DESCRIPTION_DIR, txt_filename)
-        if update.description is not None:
+        if current_user.role == "admin" and update.description is not None:
+            txt_filename = os.path.splitext(dataset['filename'])[0] + ".txt"
+            txt_file_path = os.path.join(DESCRIPTION_DIR, txt_filename)
             with open(txt_file_path, "w", encoding="utf-8") as txt_file:
                 txt_file.write(update.description)
 
         logger.info(f"Updated dataset: {dataset_id}")
         return {"message": "Dataset updated successfully"}
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        logger.error(f"Update dataset error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        logger.error(f"Unexpected error during dataset update: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.delete("/api/datasets/{dataset_id}")
 async def delete_dataset(dataset_id: int, current_user: User = Depends(get_current_active_user)):

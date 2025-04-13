@@ -617,10 +617,6 @@ onUnmounted(() => {
   margin: 0 auto 30px; /* Center and add spacing below */
 }
 
-.search-input {
-  /* Base class for shared styles */
-}
-
 /* Specific widths for each input */
 .search-input-filename {
   width: 300px; /* Increased width for filename search */

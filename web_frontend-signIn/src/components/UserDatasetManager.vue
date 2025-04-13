@@ -27,7 +27,16 @@
         </template>
         <el-table v-loading="loading" :data="datasets" style="width: 100%">
           <el-table-column prop="filename" label="File Name" />
-          <el-table-column prop="category" label="Category" width="150" />
+          <el-table-column label="Category" width="200">
+            <template #default="scope">
+              <div class="category-cell">
+                <span :title="scope.row.category">{{ truncate(scope.row.category, 15) }}</span>
+                <el-button type="primary" size="small" @click="showEditCategoryDialog(scope.row)">
+                  Edit
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="Size" width="120">
             <template #default="scope">
               {{ formatSize(scope.row.size) }}
@@ -36,7 +45,7 @@
           <el-table-column label="Description" width="300">
             <template #default="scope">
               <div class="description-cell">
-                <span :title="scope.row.description">{{ truncate(scope.row.description, 20) }}</span>
+                <span :title="scope.row.description">{{ truncate_des(scope.row.description, 20) }}</span>
                 <el-button type="primary" size="small" @click="showEditDialog(scope.row)">
                   Edit
                 </el-button>
@@ -103,20 +112,12 @@
             </template>
           </el-upload>
         </el-form-item>
-        <el-form-item label="Category" prop="category">
-          <el-select
+        <el-form-item label="Category">
+          <el-input
             v-model="uploadForm.category"
-            placeholder="Select a category"
+            placeholder="Enter a category (defaults to uncategorized)"
             style="width: 100%"
-            clearable
-          >
-            <el-option
-              v-for="cat in categories"
-              :key="cat.category"
-              :label="cat.category"
-              :value="cat.category"
-            />
-          </el-select>
+          />
         </el-form-item>
         <el-form-item label="Description">
           <el-input
@@ -156,7 +157,6 @@
         </span>
       </template>
     </el-dialog>
-
     <!-- Edit Description Dialog -->
     <el-dialog title="Edit Description" v-model="editDialogVisible" width="30%" :before-close="handleClose">
       <el-input v-model="currentDescription" type="textarea" :rows="4" placeholder="Enter description" />
@@ -167,6 +167,21 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- Edit Category Dialog -->
+    <el-dialog title="Edit Category" v-model="editCategoryDialogVisible" width="30%" :before-close="handleCategoryClose">
+      <el-input
+        v-model="currentCategory"
+        placeholder="Enter category (defaults to uncategorized)"
+      />
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="editCategoryDialogVisible = false">Cancel</el-button>
+          <el-button type="primary" @click="submitCategory" :loading="submittingCategory">Submit</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -183,40 +198,32 @@ const uploadStore = useUploadStore()
 
 const uploadForm = ref({
   file: null,
-  category: '',
+  category: 'uncategorized',
   description: ''
 })
 const uploadFormRef = ref(null)
-const categories = ref([])
 const datasets = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const submitting = ref(false)
+const submittingCategory = ref(false)
 const dialogVisible = ref(false)
 const editDialogVisible = ref(false)
+const editCategoryDialogVisible = ref(false)
 const currentDescription = ref('')
+const currentCategory = ref('')
 const currentRow = ref(null)
 const searchQuery = ref('')
 
 const uploadRules = ref({
-  file: [{ required: true, message: 'Please select a file', trigger: 'change' }],
-  category: [{ required: true, message: 'Please select a category', trigger: 'change' }]
+  file: [{ required: true, message: 'Please select a file', trigger: 'change' }]
 })
 
 const canSubmit = computed(() => {
-  return uploadForm.value.file && uploadForm.value.category
+  return uploadForm.value.file
 })
-
-const fetchCategories = async () => {
-  try {
-    const response = await axios.get('/api/categories_show')
-    categories.value = response.data.categories_show
-  } catch (error) {
-    ElMessage.error('Failed to fetch categories: ' + (error.response?.data?.detail || error.message))
-  }
-}
 
 const fetchDatasets = async () => {
   if (!authStore.token) {
@@ -296,7 +303,7 @@ const submitUpload = async () => {
         await axios.post('/api/upload', formData, config)
         ElMessage.success('Upload successful')
         uploadForm.value.file = null
-        uploadForm.value.category = ''
+        uploadForm.value.category = 'uncategorized'
         uploadForm.value.description = ''
         uploadFormRef.value.resetFields()
         dialogVisible.value = false
@@ -369,6 +376,12 @@ const showEditDialog = (row) => {
   editDialogVisible.value = true
 }
 
+const showEditCategoryDialog = (row) => {
+  currentRow.value = row
+  currentCategory.value = row.category || 'uncategorized'
+  editCategoryDialogVisible.value = true
+}
+
 const submitDescription = async () => {
   try {
     submitting.value = true
@@ -387,7 +400,31 @@ const submitDescription = async () => {
   }
 }
 
+const submitCategory = async () => {
+  try {
+    submittingCategory.value = true
+    await axios.put(
+      `/api/datasets/${currentRow.value.id}`,
+      { categories: currentCategory.value || '' },
+      { headers: { Authorization: `Bearer ${authStore.token}` } }
+    )
+    ElMessage.success('Category updated')
+    editCategoryDialogVisible.value = false
+    fetchDatasets()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || 'Failed to update category')
+  } finally {
+    submittingCategory.value = false
+  }
+}
+
 const handleClose = (done) => {
+  ElMessageBox.confirm('Are you sure to close without saving?')
+    .then(() => done())
+    .catch(() => {})
+}
+
+const handleCategoryClose = (done) => {
   ElMessageBox.confirm('Are you sure to close without saving?')
     .then(() => done())
     .catch(() => {})
@@ -406,7 +443,13 @@ const formatDate = (date) => {
 }
 
 const truncate = (text, length) => {
-  if (!text) return ''
+  if (!text) return 'uncategorized'
+  if (text.length <= length) return text
+  return text.substring(0, length) + '...'
+}
+
+const truncate_des = (text, length) => {
+  if (!text) return 'no description'
   if (text.length <= length) return text
   return text.substring(0, length) + '...'
 }
@@ -416,7 +459,6 @@ onMounted(() => {
     ElMessage.error('Please login to manage datasets')
     window.location.href = '/'
   } else {
-    fetchCategories()
     fetchDatasets()
   }
 })
@@ -479,6 +521,21 @@ onMounted(() => {
 }
 
 .description-cell span {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0 10px;
+}
+
+.category-cell span {
   flex-grow: 1;
   overflow: hidden;
   text-overflow: ellipsis;

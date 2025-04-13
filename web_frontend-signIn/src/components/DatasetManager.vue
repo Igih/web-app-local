@@ -292,20 +292,16 @@
                 </template>
               </el-upload>
             </el-form-item>
-            <el-form-item label="Category" prop="category">
-              <el-select
+            <el-form-item label="Category">
+              <el-input
                 v-model="uploadForm.category"
-                placeholder="Select a category"
+                placeholder="Enter a category (defaults to uncategorized)"
+                type="textarea" 
+                :rows="1" 
+                :maxlength="50" 
+                show-word-limit 
                 style="width: 100%"
-                :disabled="categoriesLoading"
-              >
-                <el-option
-                  v-for="item in categoriesList"
-                  :key="item.category"
-                  :label="item.category"
-                  :value="item.category"
-                />
-              </el-select>
+              />
             </el-form-item>
             <el-form-item label="Description">
               <el-input
@@ -465,7 +461,7 @@ const currentCountForm = ref({ count: null })
 const countForm = ref(null)
 const descriptionDialogVisible = ref(false)
 const currentDescriptionForm = ref({ description: '' })
-
+const originalCategory = ref('');
 const newCategory = ref({
   images: [],
   description: '',
@@ -475,7 +471,7 @@ const newCategory = ref({
 const categoryForm = ref(null)
 const uploadForm = ref({
   file: null,
-  category: '',
+  category: 'uncategorized',
   description: ''
 })
 const uploadFormRef = ref(null)
@@ -523,14 +519,11 @@ const countRules = {
 const uploadRules = {
   file: [
     { required: true, message: 'Please upload a file', trigger: 'change' }
-  ],
-  category: [
-    { required: true, message: 'Please select a category', trigger: 'change' }
   ]
 }
 
 const isFormValid = computed(() => {
-  return uploadForm.value.file && uploadForm.value.category
+  return uploadForm.value.file
 })
 
 const showUploadDialog = () => {
@@ -957,10 +950,11 @@ const showEditDialog = (row) => {
 }
 
 const showCategoriesDialog = (row) => {
-  currentRow.value = row
-  currentCategory.value = row.category || ''
-  categoriesDialogVisible.value = true
-}
+  currentRow.value = row;
+  currentCategory.value = row.category || '';
+  originalCategory.value = row.category || ''; // Store the original value
+  categoriesDialogVisible.value = true;
+};
 
 const submitDescription = async () => {
   try {
@@ -989,29 +983,37 @@ const submitDescription = async () => {
 
 const submitCategory = async () => {
   try {
-    submitting.value = true
-    const endpoint = activeTab.value === 'categories' ? `/api/categories_show/${currentRow.value.id}` : `/api/datasets/${currentRow.value.id}`
-    const payload = activeTab.value === 'categories' ? 
-      { category: currentCategory.value } : 
-      { category: currentCategory.value }
+    if (currentCategory.value === originalCategory.value) {
+      ElMessage.info('No changes made to the category');
+      categoriesDialogVisible.value = false;
+      return;
+    }
+
+    submitting.value = true;
+    const endpoint = activeTab.value === 'categories' ? `/api/categories_show/${currentRow.value.id}` : `/api/datasets/${currentRow.value.id}`;
+    const payload = activeTab.value === 'categories' 
+      ? { category: currentCategory.value } 
+      : { categories: currentCategory.value };
     await axios.put(endpoint, payload, {
       headers: { Authorization: `Bearer ${authStore.token}` }
-    })
-    ElMessage.success(activeTab.value === 'categories' ? 'Category updated' : 'Category updated')
-    categoriesDialogVisible.value = false
-    activeTab.value === 'categories' ? fetchCategoriesShow() : fetchDatasets()
+    });
+    ElMessage.success(activeTab.value === 'categories' ? 'Category updated' : 'Category updated');
+    categoriesDialogVisible.value = false;
+    activeTab.value === 'categories' ? fetchCategoriesShow() : fetchDatasets();
   } catch (error) {
     if (error.response?.status === 401) {
-      ElMessage.error('Session expired, please login again')
-      authStore.logout()
-      window.location.href = '/'
+      ElMessage.error('Session expired, please login again');
+      authStore.logout();
+      window.location.href = '/';
+    } else if (error.response?.status === 400) {
+      ElMessage.error(`Validation error: ${error.response?.data?.detail || 'Invalid input'}`);
     } else {
-      ElMessage.error(error.response?.data?.detail || 'Failed to update category')
+      ElMessage.error(error.response?.data?.detail || 'Failed to update category');
     }
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
-}
+};
 
 const handleClose = (done) => {
   ElMessageBox.confirm('Are you sure to close without saving?')
