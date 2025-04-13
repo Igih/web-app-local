@@ -238,6 +238,7 @@ def init_db():
                     VALUES ('root1', %s, 'admin')
                     ON CONFLICT (username) DO NOTHING
                 """, (hashed_password,))
+                hashed_password = get_password_hash("root123")
                 cur.execute("""
                     INSERT INTO users (username, password, role)
                     VALUES ('root2', %s, 'admin')
@@ -246,7 +247,7 @@ def init_db():
                 hashed_password = get_password_hash("user123")
                 cur.execute("""
                     INSERT INTO users (username, password, role)
-                    VALUES ('user', %s, 'user')
+                    VALUES ('user', %s, 'admin')
                     ON CONFLICT (username) DO NOTHING
                 """, (hashed_password,))
         logger.info("Database tables initialized")
