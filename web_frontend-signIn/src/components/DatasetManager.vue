@@ -146,7 +146,11 @@
               <div v-else class="no-images">No images uploaded yet</div>
             </el-form-item>
             <el-form-item label="Description">
-              <el-input v-model="newCategory.description" type="textarea" :rows="4" />
+              <el-input v-model="newCategory.description" 
+              type="textarea" 
+              :rows="4" 
+              placeholder="Enter description" 
+              />
             </el-form-item>
             <el-form-item label="Category" prop="category" required>
               <el-input 
