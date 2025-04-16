@@ -71,6 +71,10 @@ class ChangePassword(BaseModel):
     current_password: str
     new_password: str
 
+class ResetPassword(BaseModel):
+    username: str
+    new_password: str
+
 class UserInDB(User):
     password: str
 
@@ -91,7 +95,6 @@ class CreateUser(BaseModel):
     username: str
     password: str
     role: str
-
 
 # Utility Functions
 def verify_password(plain_password: str, hashed_password: str):
@@ -416,6 +419,67 @@ async def change_password(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error changing password: {str(e)}"
+        )
+
+@app.post("/api/reset-password")
+async def reset_password(
+    password_data: ResetPassword,
+    current_user: User = Depends(admin_required)
+):
+    try:
+        # Validate input
+        if not password_data.username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username is required"
+            )
+        if len(password_data.new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be at least 6 characters"
+            )
+
+        # Check if the user exists
+        target_user = get_user(password_data.username)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User does not exist"
+            )
+
+        # Prevent admin from resetting their own password through this endpoint
+        if password_data.username == current_user.username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admins cannot reset their own password using this endpoint. Use change-password instead."
+            )
+
+        # Hash the new password
+        hashed_new_password = get_password_hash(password_data.new_password)
+
+        # Update password in the database
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "UPDATE users SET password = %s WHERE username = %s",
+                    (hashed_new_password, password_data.username)
+                )
+                if cur.rowcount == 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to update password"
+                    )
+
+        logger.info(f"Password reset for user {password_data.username} by admin {current_user.username}")
+        return {"message": "Password reset successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reset password error for user {password_data.username} by admin {current_user.username}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error resetting password: {str(e)}"
         )
 
 @app.get("/api/users/me")

@@ -84,6 +84,12 @@
               >
                 Create User
               </el-dropdown-item>
+              <el-dropdown-item 
+                v-if="authStore.currentUser && authStore.currentUser.role === 'admin'" 
+                command="reset-password"
+              >
+                Reset User Password
+              </el-dropdown-item>
               <el-dropdown-item command="change-password">Change Password</el-dropdown-item>
               <el-dropdown-item command="logout">Logout</el-dropdown-item>
             </el-dropdown-menu>
@@ -165,6 +171,27 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 重置用户密码对话框 -->
+    <el-dialog v-model="resetPasswordDialogVisible" title="Reset User Password" width="30%">
+      <el-form :model="resetPasswordForm" label-width="120px" :rules="resetPasswordRules" ref="resetPasswordFormRef">
+        <el-form-item label="Username" prop="username">
+          <el-input v-model="resetPasswordForm.username" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="New Password" prop="newPassword">
+          <el-input v-model="resetPasswordForm.newPassword" type="password" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="Confirm Password" prop="confirmPassword">
+          <el-input v-model="resetPasswordForm.confirmPassword" type="password" autocomplete="off" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="resetPasswordDialogVisible = false">Cancel</el-button>
+          <el-button type="primary" @click="handleResetPassword">Reset</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -184,8 +211,10 @@ const categories = ref([])
 const loginDialogVisible = ref(false)
 const changePasswordDialogVisible = ref(false)
 const createUserDialogVisible = ref(false)
+const resetPasswordDialogVisible = ref(false)
 const changePasswordFormRef = ref(null)
 const createUserFormRef = ref(null)
+const resetPasswordFormRef = ref(null)
 
 const loginForm = ref({
   username: '',
@@ -203,6 +232,12 @@ const createUserForm = ref({
   password: '',
   confirmPassword: '',
   role: ''
+})
+
+const resetPasswordForm = ref({
+  username: '',
+  newPassword: '',
+  confirmPassword: ''
 })
 
 const passwordRules = {
@@ -251,6 +286,29 @@ const createUserRules = {
   ],
   role: [
     { required: true, message: 'Please select a role', trigger: 'change' }
+  ]
+}
+
+const resetPasswordRules = {
+  username: [
+    { required: true, message: 'Please enter a username', trigger: 'blur' }
+  ],
+  newPassword: [
+    { required: true, message: 'Please enter a new password', trigger: 'blur' },
+    { min: 6, message: 'Password must be at least 6 characters', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: 'Please confirm the new password', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (value !== resetPasswordForm.value.newPassword) {
+          callback(new Error('Passwords do not match'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
   ]
 }
 
@@ -379,6 +437,25 @@ const handleCreateUser = async () => {
   }
 }
 
+const handleResetPassword = async () => {
+  try {
+    await resetPasswordFormRef.value.validate()
+    const response = await axios.post('/api/reset-password', {
+      username: resetPasswordForm.value.username,
+      new_password: resetPasswordForm.value.newPassword
+    })
+    ElMessage.success('Password reset successfully')
+    resetPasswordDialogVisible.value = false
+    resetPasswordForm.value = {
+      username: '',
+      newPassword: '',
+      confirmPassword: ''
+    }
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || 'Failed to reset password')
+  }
+}
+
 const handleUserCommand = (command) => {
   if (command === 'logout') {
     authStore.logout()
@@ -388,6 +465,8 @@ const handleUserCommand = (command) => {
     changePasswordDialogVisible.value = true
   } else if (command === 'create-user') {
     createUserDialogVisible.value = true
+  } else if (command === 'reset-password') {
+    resetPasswordDialogVisible.value = true
   }
 }
 

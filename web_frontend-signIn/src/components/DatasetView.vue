@@ -149,6 +149,7 @@ import axios from 'axios'
 import { Icon } from '@iconify/vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import fallbackImage from '@/assets/00214.jpg'
 
 const route = useRoute()
 const router = useRouter()
@@ -188,7 +189,7 @@ const getImageUrl = (filename) => {
 }
 
 const handleImageError = (event) => {
-  event.target.src = '@/assets/00214.jpg'
+  event.target.src = fallbackImage
 }
 
 const scrollToTop = () => {
