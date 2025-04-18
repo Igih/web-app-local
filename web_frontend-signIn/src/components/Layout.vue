@@ -63,6 +63,13 @@
           <span>My Data</span>
         </el-menu-item>
         <el-menu-item 
+          index="8" 
+          @click="goToMarkdownEditor"
+        >
+          <Icon icon="mdi:markdown" class="menu-icon" />
+          <span>Markdown Editor</span>
+        </el-menu-item>
+        <el-menu-item 
           v-if="authStore.currentUser && authStore.currentUser.role === 'admin'" 
           index="6" 
           @click="goToDatasetManager"
@@ -319,6 +326,8 @@ const activeIndex = computed(() => {
     return '6'
   } else if (route.path === '/user-dataset-manager') {
     return '7'
+  } else if (route.path === '/markdown-editor') {
+    return '8'
   } else if (route.path.startsWith('/dataset/')) {
     return '1'
   }
@@ -364,6 +373,10 @@ const getCategoryIcon = (category) => {
 
 const goToCategory = (category) => {
   router.push(`/dataset/${category.toLowerCase()}`)
+}
+
+const goToMarkdownEditor = () => {
+  router.push('/markdown-editor')
 }
 
 const goToDatasetManager = () => {
@@ -474,6 +487,7 @@ onMounted(() => {
   fetchCategories()
 })
 </script>
+
 
 <style scoped>
 .layout-container {
