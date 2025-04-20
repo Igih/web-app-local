@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from routers import auth, user, dataset, category
+from routers import auth, user, dataset, category, markdown
 from config import BASE_STORAGE_DIR, IMAGES_DIR
 import os
 from utils.db import init_db_pool
@@ -27,6 +27,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
 app.include_router(dataset.router, prefix="/api")
 app.include_router(category.router, prefix="/api")
+app.include_router(markdown.router, prefix="/api")
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):

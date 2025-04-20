@@ -54,8 +54,7 @@ app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
 app.mount("/static", StaticFiles(directory="dist", html=True), name="app")
 app.mount("/category_images", StaticFiles(directory=IMAGES_DIR), name="category_images")
 
-
-# Models
+# Models (existing models remain unchanged, adding new model for Markdown)
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -97,7 +96,15 @@ class CreateUser(BaseModel):
     password: str
     role: str
 
-# Utility Functions
+class MarkdownCreate(BaseModel):
+    title: str
+    content: str
+
+class MarkdownUpdate(BaseModel):
+    title: str | None = None
+    content: str | None = None
+
+# Utility Functions (existing functions remain unchanged)
 def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -156,7 +163,7 @@ async def admin_required(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
 
-# Database Connection Pool
+# Database Connection Pool (existing pool remains unchanged)
 try:
     DB_POOL = SimpleConnectionPool(minconn=1, maxconn=20, **DB_CONFIG)
     logger.info("Connection pool initialized successfully")
@@ -207,53 +214,33 @@ def init_db():
         with db_transaction() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    CREATE TABLE IF NOT EXISTS users (
+                    CREATE TABLE IF NOT EXISTS markdown_documents (
                         id SERIAL PRIMARY KEY,
-                        username VARCHAR(50) UNIQUE NOT NULL,
-                        password VARCHAR(100) NOT NULL,
-                        role VARCHAR(10) NOT NULL DEFAULT 'user'
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        title VARCHAR(255) NOT NULL,
+                        content TEXT NOT NULL,
+                        content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('public.chinese', title || ' ' || content)) STORED,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
                 cur.execute("""
-                    CREATE TABLE IF NOT EXISTS datasets (
-                        id SERIAL PRIMARY KEY,
-                        filename VARCHAR(255) NOT NULL,
-                        uploader_type VARCHAR(10) NOT NULL,
-                        uploader_id INTEGER REFERENCES users(id),
-                        category VARCHAR(50) NOT NULL,
-                        description TEXT,
-                        size BIGINT NOT NULL,
-                        path VARCHAR(512) NOT NULL,
-                        upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
+                    CREATE OR REPLACE FUNCTION update_timestamp() RETURNS TRIGGER AS $$
+                    BEGIN
+                        NEW.updated_at = CURRENT_TIMESTAMP;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;
+
+                    DROP TRIGGER IF EXISTS update_markdown_timestamp ON markdown_documents;
+                    CREATE TRIGGER update_markdown_timestamp
+                    BEFORE UPDATE ON markdown_documents
+                    FOR EACH ROW EXECUTE FUNCTION update_timestamp();
                 """)
                 cur.execute("""
-                    CREATE TABLE IF NOT EXISTS categories_show (
-                        id SERIAL PRIMARY KEY,
-                        images TEXT[] NOT NULL,
-                        description TEXT,
-                        category VARCHAR(50) NOT NULL,
-                        count INTEGER NOT NULL
-                    )
+                    CREATE INDEX IF NOT EXISTS content_tsv_idx 
+                    ON markdown_documents USING GIN(content_tsv)
                 """)
-                hashed_password = get_password_hash("root123")
-                cur.execute("""
-                    INSERT INTO users (username, password, role)
-                    VALUES ('root1', %s, 'admin')
-                    ON CONFLICT (username) DO NOTHING
-                """, (hashed_password,))
-                hashed_password = get_password_hash("root123")
-                cur.execute("""
-                    INSERT INTO users (username, password, role)
-                    VALUES ('root2', %s, 'admin')
-                    ON CONFLICT (username) DO NOTHING
-                """, (hashed_password,))
-                hashed_password = get_password_hash("user123")
-                cur.execute("""
-                    INSERT INTO users (username, password, role)
-                    VALUES ('user', %s, 'admin')
-                    ON CONFLICT (username) DO NOTHING
-                """, (hashed_password,))
         logger.info("Database tables initialized")
     except Exception as e:
         logger.error(f"Failed to initialize database: {str(e)}")
@@ -261,7 +248,7 @@ def init_db():
 
 init_db()
 
-# Routes
+# Existing Routes (unchanged)
 @app.post("/api/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     user = authenticate_user(form_data.username, form_data.password)
@@ -296,3 +283,131 @@ async def login(user: UserLogin):
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+# New Markdown Routes
+@app.post("/api/markdowns")
+async def create_markdown(
+    markdown: MarkdownCreate,
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    INSERT INTO markdown_documents (user_id, title, content)
+                    VALUES (%s, %s, %s)
+                    RETURNING id, user_id, title, content, created_at, updated_at
+                    """,
+                    (current_user.id, markdown.title, markdown.content)
+                )
+                new_markdown = cur.fetchone()
+        return new_markdown
+    except Exception as e:
+        logger.error(f"Failed to create markdown: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create markdown")
+
+@app.get("/api/markdowns")
+async def get_markdowns(current_user: User = Depends(get_current_active_user)):
+    try:
+        with db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id, user_id, title, content, created_at, updated_at
+                    FROM markdown_documents
+                    WHERE user_id = %s
+                    ORDER BY updated_at DESC
+                    """,
+                    (current_user.id,)
+                )
+                markdowns = cur.fetchall()
+        # Ensure markdowns is a list; fetchall() should return a list, but be explicit
+        return markdowns if isinstance(markdowns, list) else []
+    except Exception as e:
+        logger.error(f"Failed to fetch markdowns: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch markdowns")
+    
+@app.put("/api/markdowns/{markdown_id}")
+async def update_markdown(
+    markdown_id: int,
+    markdown: MarkdownUpdate,
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Check if markdown exists and belongs to user
+                cur.execute(
+                    """
+                    SELECT id, user_id
+                    FROM markdown_documents
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    (markdown_id, current_user.id)
+                )
+                if not cur.fetchone():
+                    raise HTTPException(status_code=404, detail="Markdown not found or not authorized")
+
+                # Build update query dynamically
+                update_fields = []
+                update_values = []
+                if markdown.title is not None:
+                    update_fields.append("title = %s")
+                    update_values.append(markdown.title)
+                if markdown.content is not None:
+                    update_fields.append("content = %s")
+                    update_values.append(markdown.content)
+
+                if not update_fields:
+                    raise HTTPException(status_code=400, detail="No fields to update")
+
+                update_values.append(markdown_id)
+                update_values.append(current_user.id)
+                query = f"""
+                    UPDATE markdown_documents
+                    SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s AND user_id = %s
+                    RETURNING id, user_id, title, content, created_at, updated_at
+                """
+                cur.execute(query, update_values)
+                updated_markdown = cur.fetchone()
+                if not updated_markdown:
+                    raise HTTPException(status_code=404, detail="Markdown not found")
+        return updated_markdown
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update markdown: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update markdown")
+
+@app.delete("/api/markdowns/{markdown_id}")
+async def delete_markdown(
+    markdown_id: int,
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    DELETE FROM markdown_documents
+                    WHERE id = %s AND user_id = %s
+                    RETURNING id
+                    """,
+                    (markdown_id, current_user.id)
+                )
+                deleted_markdown = cur.fetchone()
+                if not deleted_markdown:
+                    raise HTTPException(status_code=404, detail="Markdown not found or not authorized")
+        return {"message": "Markdown deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete markdown: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete markdown")
+    
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    return FileResponse("dist/index.html")

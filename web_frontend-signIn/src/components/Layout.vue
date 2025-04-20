@@ -63,11 +63,12 @@
           <span>My Data</span>
         </el-menu-item>
         <el-menu-item 
+          v-if="authStore.currentUser && authStore.currentUser.role === 'user'"
           index="8" 
           @click="goToMarkdownEditor"
         >
           <Icon icon="mdi:markdown" class="menu-icon" />
-          <span>Markdown Editor</span>
+          <span>My Docs</span>
         </el-menu-item>
         <el-menu-item 
           v-if="authStore.currentUser && authStore.currentUser.role === 'admin'" 
