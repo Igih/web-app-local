@@ -15,8 +15,8 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 async def upload_zip(file, category: str, description: str, current_user: User):
-    if not file.filename.endswith(('.zip', '.tar.gz')):
-        raise HTTPException(status_code=400, detail="Only .zip or .tar.gz files are allowed")
+    if not file.filename.endswith(('.zip', '.tar.gz', '.rar')):
+        raise HTTPException(status_code=400, detail="Only .zip, .tar.gz or .rar files are allowed")
 
     if len(category) > 50:
         raise HTTPException(status_code=400, detail="Category must not exceed 50 characters")

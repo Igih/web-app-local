@@ -278,7 +278,7 @@
                 drag
                 :file-list="uploadForm.file ? [uploadForm.file] : []"
                 :http-request="handleUpload"
-                accept=".zip,.tar.gz"
+                accept=".zip,.tar.gz,.rar"
                 :multiple="false"
                 :on-change="handleFileChange"
                 :on-remove="handleFileRemove"
@@ -291,7 +291,7 @@
                 </div>
                 <template #tip>
                   <div class="el-upload__tip">
-                    Only .zip or .tar.gz files are supported
+                    Only .zip, .tar.gz or .rar files are supported (less 50G)
                   </div>
                 </template>
               </el-upload>

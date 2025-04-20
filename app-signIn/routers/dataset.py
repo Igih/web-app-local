@@ -65,4 +65,4 @@ async def delete(
 async def download(
     dataset_id: int
 ):
-    return download_zip(dataset_id)
+    return await download_zip(dataset_id)
