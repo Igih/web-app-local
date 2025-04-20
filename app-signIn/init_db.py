@@ -38,8 +38,8 @@ def init_db():
                 #         IF NOT EXISTS (
                 #             SELECT 1 FROM pg_ts_config WHERE cfgname = 'chinese'
                 #         ) THEN
-                #             CREATE TEXT SEARCH CONFIGURATION chinese (PARSER = zhparser);
-                #             ALTER TEXT SEARCH CONFIGURATION chinese ADD MAPPING FOR n,v,a,i,d,l,j WITH simple;
+                #             CREATE TEXT SEARCH CONFIGURATION public.chinese (PARSER = zhparser);
+                #             ALTER TEXT SEARCH CONFIGURATION public.chinese ADD MAPPING FOR n,v,a,i,d,l,j WITH simple;
                 #         END IF;
                 #     END
                 #     $$;
@@ -84,7 +84,7 @@ def init_db():
                         user_id INTEGER NOT NULL REFERENCES users(id),
                         title VARCHAR(255) NOT NULL,
                         content TEXT NOT NULL,
-                        content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('chinese', title || ' ' || content)) STORED,
+                        content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('public.chinese', title || ' ' || content)) STORED,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
