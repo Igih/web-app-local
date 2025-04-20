@@ -15,7 +15,7 @@ DB_POOL = None
 def init_db_pool():
     global DB_POOL
     try:
-        DB_POOL = SimpleConnectionPool(minconn=1, maxconn=20, **DB_CONFIG)
+        DB_POOL = SimpleConnectionPool(minconn=5, maxconn=20, **DB_CONFIG)
         logger.info("Connection pool initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize connection pool: {str(e)}")

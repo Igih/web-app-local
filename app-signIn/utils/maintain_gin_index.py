@@ -76,5 +76,9 @@ def maintain_gin_index():
             conn.close()
 
 if __name__ == "__main__":
+    
+    # 维护前 备份数据库
+    # pg_dump -U your_user your_db > backup.sql
+
     result = maintain_gin_index()
     print(result)
