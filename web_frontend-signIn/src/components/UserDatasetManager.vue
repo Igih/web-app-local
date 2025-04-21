@@ -1,26 +1,59 @@
 <template>
-  <div class="app-container">
-    <div class="dataset-section">
-      <el-card class="dataset-card">
+  <div class="app-container bg-gray-100 min-h-screen p-6">
+    <!-- Pending Uploads Section -->
+    <div class="dataset-section mb-6">
+      <el-card class="dataset-card shadow-lg">
         <template #header>
-          <div class="card-header">
-            <span>My Datasets</span>
-            <div class="header-actions">
+          <div class="card-header flex justify-between items-center">
+            <span class="text-xl font-semibold text-gray-800">Pending Uploads</span>
+            <el-button type="primary" @click="fetchPendingUploads" :loading="pendingLoading">
+              Refresh
+            </el-button>
+          </div>
+        </template>
+        <el-table v-loading="pendingLoading" :data="pendingFiles" style="width: 100%">
+          <el-table-column prop="filename" label="File Name" />
+          <el-table-column label="Size" width="120">
+            <template #default="scope">
+              {{ formatSize(scope.row.size) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="Operations" width="200">
+            <template #default="scope">
+              <el-button type="primary" size="small" @click="showPendingUploadDialog(scope.row)">
+                Upload
+              </el-button>
+              <el-button type="danger" size="small" @click="deletePendingFile(scope.row.filename)">
+                Delete
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+    </div>
+
+    <!-- My Datasets Section -->
+    <div class="dataset-section">
+      <el-card class="dataset-card shadow-lg">
+        <template #header>
+          <div class="card-header flex justify-between items-center">
+            <span class="text-xl font-semibold text-gray-800">My Datasets</span>
+            <div class="header-actions flex items-center gap-4">
               <el-input
                 v-model="searchQuery"
                 placeholder="Search by filename..."
                 clearable
                 @keyup.enter="searchDatasets"
-                class="search-input"
+                class="w-64"
               />
               <el-button type="primary" @click="searchDatasets">
                 Search
               </el-button>
-              <el-button type="primary" @click="fetchDatasets" :loading="loading">
-                Refresh
-              </el-button>
               <el-button type="primary" @click="dialogVisible = true">
                 Upload
+              </el-button>
+              <el-button type="primary" @click="fetchDatasets" :loading="loading">
+                Refresh
               </el-button>
             </div>
           </div>
@@ -74,9 +107,7 @@
           :page-sizes="[10, 20, 50, 100]"
           :total="total"
           layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSizeChange"
-          @current-change="handlePageChange"
-          style="margin-top: 20px; text-align: center;"
+          class="mt-6 text-center"
         />
       </el-card>
     </div>
@@ -107,7 +138,7 @@
             </div>
             <template #tip>
               <div class="el-upload__tip">
-                Only .zip, .tar.gz or .rar files are supported (less 50G)
+                Only .zip, .tar.gz or .rar files are supported (limit 50G)
               </div>
             </template>
           </el-upload>
@@ -134,14 +165,14 @@
             status="success"
             striped
           />
-          <div class="progress-info">
+          <div class="progress-info flex justify-between mt-2 text-sm text-gray-600">
             <span>{{ uploadStore.uploadProgress }}%</span>
             <span>{{ uploadStore.uploadSpeed }}</span>
           </div>
         </div>
       </el-form>
       <template #footer>
-        <span class="dialog-footer">
+        <span class="dialog-footer flex gap-4">
           <el-button v-if="uploadStore.isUploading" @click="cancelUpload">Cancel Upload</el-button>
           <el-button @click="dialogVisible = false" :disabled="uploadStore.isUploading">
             Close
@@ -157,11 +188,53 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- Pending Upload Dialog -->
+    <el-dialog
+      title="Upload Pending File"
+      v-model="pendingUploadDialogVisible"
+      width="40%"
+      :before-close="handlePendingUploadDialogClose"
+      destroy-on-close
+    >
+      <el-form :model="pendingUploadForm" label-position="top" ref="pendingUploadFormRef">
+        <el-form-item label="File Name">
+          <el-input
+            v-model="pendingUploadForm.filename"
+            disabled
+          />
+        </el-form-item>
+        <el-form-item label="Category">
+          <el-input
+            v-model="pendingUploadForm.category"
+            placeholder="Enter a category (defaults to uncategorized)"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="Description">
+          <el-input
+            v-model="pendingUploadForm.description"
+            type="textarea"
+            :rows="4"
+            placeholder="Enter description"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer flex gap-4">
+          <el-button @click="pendingUploadDialogVisible = false">Cancel</el-button>
+          <el-button type="primary" @click="submitPendingUpload" :loading="submittingPending">
+            Submit
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
     <!-- Edit Description Dialog -->
     <el-dialog title="Edit Description" v-model="editDialogVisible" width="30%" :before-close="handleClose">
       <el-input v-model="currentDescription" type="textarea" :rows="4" placeholder="Enter description" />
       <template #footer>
-        <span class="dialog-footer">
+        <span class="dialog-footer flex gap-4">
           <el-button @click="editDialogVisible = false">Cancel</el-button>
           <el-button type="primary" @click="submitDescription" :loading="submitting">Submit</el-button>
         </span>
@@ -175,13 +248,12 @@
         placeholder="Enter category (defaults to uncategorized)"
       />
       <template #footer>
-        <span class="dialog-footer">
+        <span class="dialog-footer flex gap-4">
           <el-button @click="editCategoryDialogVisible = false">Cancel</el-button>
           <el-button type="primary" @click="submitCategory" :loading="submittingCategory">Submit</el-button>
         </span>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
@@ -201,17 +273,27 @@ const uploadForm = ref({
   category: 'uncategorized',
   description: ''
 })
+const pendingUploadForm = ref({
+  filename: '',
+  category: 'uncategorized',
+  description: ''
+})
 const uploadFormRef = ref(null)
+const pendingUploadFormRef = ref(null)
 const datasets = ref([])
+const pendingFiles = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
+const pendingLoading = ref(false)
 const submitting = ref(false)
 const submittingCategory = ref(false)
+const submittingPending = ref(false)
 const dialogVisible = ref(false)
 const editDialogVisible = ref(false)
 const editCategoryDialogVisible = ref(false)
+const pendingUploadDialogVisible = ref(false)
 const currentDescription = ref('')
 const currentCategory = ref('')
 const currentRow = ref(null)
@@ -256,6 +338,25 @@ const fetchDatasets = async () => {
     }
   } finally {
     loading.value = false
+  }
+}
+
+const fetchPendingUploads = async () => {
+  if (!authStore.token) {
+    ElMessage.error('Please login to manage datasets')
+    window.location.href = '/'
+    return
+  }
+  try {
+    pendingLoading.value = true
+    const response = await axios.get('/api/pending-uploads', {
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
+    pendingFiles.value = response.data.files
+  } catch (error) {
+    ElMessage.error('Failed to fetch pending uploads: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    pendingLoading.value = false
   }
 }
 
@@ -337,6 +438,62 @@ const handleUploadDialogClose = (done) => {
     ElMessageBox.confirm('Are you sure you want to close without uploading?')
       .then(() => done())
       .catch(() => {})
+  }
+}
+
+const showPendingUploadDialog = (row) => {
+  pendingUploadForm.value.filename = row.filename
+  pendingUploadForm.value.category = 'uncategorized'
+  pendingUploadForm.value.description = ''
+  pendingUploadDialogVisible.value = true
+}
+
+const submitPendingUpload = async () => {
+  try {
+    submittingPending.value = true
+    const formData = new FormData()
+    formData.append('filename', pendingUploadForm.value.filename)
+    formData.append('category', pendingUploadForm.value.category)
+    formData.append('description', pendingUploadForm.value.description || '')
+    await axios.post('/api/upload-from-pending', formData, {
+      headers: {
+        Authorization: `Bearer ${authStore.token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    ElMessage.success('Pending file uploaded successfully')
+    pendingUploadDialogVisible.value = false
+    fetchDatasets()
+    fetchPendingUploads()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || 'Failed to upload pending file')
+  } finally {
+    submittingPending.value = false
+  }
+}
+
+const handlePendingUploadDialogClose = (done) => {
+  ElMessageBox.confirm('Are you sure you want to close without uploading?')
+    .then(() => done())
+    .catch(() => {})
+}
+
+const deletePendingFile = async (filename) => {
+  try {
+    await ElMessageBox.confirm('Are you sure you want to delete this pending file?', 'Warning', {
+      confirmButtonText: 'Delete',
+      cancelButtonText: 'Cancel',
+      type: 'warning'
+    })
+    await axios.delete(`/api/pending-uploads/${filename}`, {
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
+    ElMessage.success('Pending file deleted successfully')
+    fetchPendingUploads()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.detail || 'Failed to delete pending file')
+    }
   }
 }
 
@@ -460,30 +617,35 @@ onMounted(() => {
     window.location.href = '/'
   } else {
     fetchDatasets()
+    fetchPendingUploads()
   }
 })
 </script>
 
 <style scoped>
 .app-container {
-  padding: 20px;
-  margin-top: 0;
-  height: calc(100vh - 40px);
-  overflow-y: auto;
+  background-color: #f3f4f6;
+  min-height: 100vh;
+  padding: 1.5rem;
 }
 
 .dataset-section {
   width: 100%;
+  margin-bottom: 1.5rem;
 }
 
 .dataset-card {
   width: 100%;
+  background-color: #ffffff;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 0.5rem 1rem;
 }
 
 .wide-upload {
@@ -492,24 +654,26 @@ onMounted(() => {
 
 .wide-upload :deep(.el-upload-dragger) {
   width: 100%;
-  padding: 20px;
-  height: 200px;
+  padding: 1.25rem;
+  height: 12rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  border: 2px dashed #d1d5db;
+  border-radius: 0.5rem;
 }
 
 .el-upload__text em {
-  color: #409eff;
-  font-style: normal;
+  color: #3b82f6;
+  font-weight: 500;
 }
 
 .el-table .cell {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 10px;
+  gap: 0.5rem;
 }
 
 .description-cell {
@@ -517,7 +681,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0 10px;
+  padding: 0 0.5rem;
 }
 
 .description-cell span {
@@ -532,7 +696,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0 10px;
+  padding: 0 0.5rem;
 }
 
 .category-cell span {
@@ -543,40 +707,59 @@ onMounted(() => {
 }
 
 .el-button--small {
-  padding: 6px 12px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
 }
 
 .search-input {
-  width: 200px;
-  margin-right: 10px;
+  width: 16rem;
+  margin-right: 1rem;
 }
 
 .el-button--primary {
-  background-color: #409eff;
-  border-color: #409eff;
-  color: #fff;
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
 }
 
 .el-button--primary:hover {
-  background-color: #66b1ff;
-  border-color: #66b1ff;
+  background-color: #2563eb;
+  border-color: #2563eb;
 }
 
 .upload-status {
-  margin-top: 10px;
+  margin-top: 1rem;
   text-align: center;
 }
 
 .progress-info {
   display: flex;
   justify-content: space-between;
-  margin-top: 5px;
-  font-size: 14px;
-  color: #606266;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #4b5563;
 }
 
 .dialog-footer {
   display: flex;
   gap: 10px;
+}
+
+.header-actions {
+  display: flex;
+  flex-direction: row; /* 明确指定水平排列 */
+  align-items: center;
+  gap: 1rem;
+}
+
+/* 确保输入框和按钮的宽度和显示方式正确 */
+.w-64 {
+  width: 16rem !important; /* 确保输入框宽度固定 */
+  flex-shrink: 0; /* 防止输入框被压缩 */
+}
+
+/* 防止按钮换行 */
+.el-button {
+  white-space: nowrap;
 }
 </style>

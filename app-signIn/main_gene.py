@@ -22,11 +22,13 @@ app = FastAPI()
 BASE_STORAGE_DIR = "/home/linux/codes/datasets"
 ADMIN_STORAGE_DIR = os.path.join(BASE_STORAGE_DIR, "admin")
 USER_STORAGE_DIR = os.path.join(BASE_STORAGE_DIR, "users")
+UPLOADS_DIR = os.path.join(BASE_STORAGE_DIR, "uploads")
 DESCRIPTION_DIR = os.path.join(BASE_STORAGE_DIR, "dataset_descriptions")
 IMAGES_DIR = os.path.join(BASE_STORAGE_DIR, "category_images")
 
 os.makedirs(ADMIN_STORAGE_DIR, exist_ok=True)
 os.makedirs(USER_STORAGE_DIR, exist_ok=True)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(DESCRIPTION_DIR, exist_ok=True)
 os.makedirs(IMAGES_DIR, exist_ok=True)
 
@@ -54,7 +56,7 @@ app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
 app.mount("/static", StaticFiles(directory="dist", html=True), name="app")
 app.mount("/category_images", StaticFiles(directory=IMAGES_DIR), name="category_images")
 
-# Models (existing models remain unchanged, adding new model for Markdown)
+# Models
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -104,7 +106,7 @@ class MarkdownUpdate(BaseModel):
     title: str | None = None
     content: str | None = None
 
-# Utility Functions (existing functions remain unchanged)
+# Utility Functions
 def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -163,7 +165,7 @@ async def admin_required(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
 
-# Database Connection Pool (existing pool remains unchanged)
+# Database Connection Pool
 try:
     DB_POOL = SimpleConnectionPool(minconn=1, maxconn=20, **DB_CONFIG)
     logger.info("Connection pool initialized successfully")
@@ -248,7 +250,7 @@ def init_db():
 
 init_db()
 
-# Existing Routes (unchanged)
+# Routes
 @app.post("/api/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     user = authenticate_user(form_data.username, form_data.password)
@@ -284,128 +286,276 @@ async def login(user: UserLogin):
         "token_type": "bearer"
     }
 
-# New Markdown Routes
-@app.post("/api/markdowns")
-async def create_markdown(
-    markdown: MarkdownCreate,
+@app.post("/api/upload")
+async def upload_zip(
+    file: UploadFile = File(...),
+    category: str = Form("uncategorized"),
+    description: str = Form(None),
     current_user: User = Depends(get_current_active_user)
 ):
+    if not file.filename.endswith(('.zip', '.tar.gz')):
+        raise HTTPException(status_code=400, detail="Only .zip or .tar.gz files are allowed")
+
+    if len(category) > 50:
+        raise HTTPException(status_code=400, detail="Category must not exceed 50 characters")
+
+    if current_user.role == "admin":
+        storage_dir = ADMIN_STORAGE_DIR
+        uploader_type = "admin"
+        uploader_id = None
+    else:
+        storage_dir = os.path.join(USER_STORAGE_DIR, str(current_user.id))
+        os.makedirs(storage_dir, exist_ok=True)
+        uploader_type = "user"
+        uploader_id = current_user.id
+
+    file_path = os.path.join(storage_dir, file.filename)
+    if os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail="File already exists")
+
+    temp_path = file_path + ".tmp"
     try:
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        file_size = os.path.getsize(temp_path)
+
         with db_transaction() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
-                    INSERT INTO markdown_documents (user_id, title, content)
-                    VALUES (%s, %s, %s)
-                    RETURNING id, user_id, title, content, created_at, updated_at
+                    INSERT INTO datasets (filename, uploader_type, uploader_id, category, description, size, path)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (current_user.id, markdown.title, markdown.content)
+                    (file.filename, uploader_type, uploader_id, category, description, file_size, file_path)
                 )
-                new_markdown = cur.fetchone()
-        return new_markdown
-    except Exception as e:
-        logger.error(f"Failed to create markdown: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to create markdown")
+        shutil.move(temp_path, file_path)
 
-@app.get("/api/markdowns")
-async def get_markdowns(current_user: User = Depends(get_current_active_user)):
+        if current_user.role == "admin" and description:
+            txt_filename = os.path.splitext(file.filename)[0] + ".txt"
+            txt_file_path = os.path.join(DESCRIPTION_DIR, txt_filename)
+            with open(txt_file_path, "w", encoding="utf-8") as txt_file:
+                txt_file.write(description)
+
+        logger.info(f"Uploaded file: {file.filename} by {current_user.username}")
+        return {"filename": file.filename, "message": "Upload successful"}
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        logger.error(f"Upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+
+@app.get("/api/datasets")
+async def list_datasets(
+    category_filter: str | None = Query(None),
+    filename_filter: str | None = Query(None),
+    uploader_type: str | None = Query(None, regex="^(admin|user|all)$"),
+    username_filter: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100)
+):
+    try:
+        with db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                base_query = """
+                    SELECT d.id, d.filename, d.uploader_type, u.username AS uploader_name,
+                           d.category, d.description, d.size, d.path, d.upload_date
+                    FROM datasets d
+                    LEFT JOIN users u ON d.uploader_id = u.id
+                """
+                count_query = "SELECT COUNT(*) FROM datasets d"
+                where_clauses = []
+                params = []
+
+                if category_filter:
+                    where_clauses.append("LOWER(d.category) LIKE LOWER(%s)")
+                    params.append(f"%{category_filter}%")
+                if filename_filter:
+                    where_clauses.append("LOWER(d.filename) LIKE LOWER(%s)")
+                    params.append(f"%{filename_filter}%")
+                if uploader_type and uploader_type != "all":
+                    where_clauses.append("d.uploader_type = %s")
+                    params.append(uploader_type)
+                if username_filter:
+                    count_query += " LEFT JOIN users u ON d.uploader_id = u.id"
+                    where_clauses.append("LOWER(u.username) LIKE LOWER(%s)")
+                    params.append(f"%{username_filter}%")
+
+                if where_clauses:
+                    where_str = " WHERE " + " AND ".join(where_clauses)
+                    base_query += where_str
+                    count_query += where_str
+
+                cur.execute(count_query, params)
+                total = cur.fetchone()['count']
+
+                base_query += " ORDER BY d.upload_date DESC LIMIT %s OFFSET %s"
+                params.extend([page_size, (page - 1) * page_size])
+
+                cur.execute(base_query, params)
+                datasets = cur.fetchall()
+
+                logger.debug(f"Datasets fetched: {len(datasets)}")
+        return {
+            "datasets": datasets,
+            "total": total,
+            "page": page,
+            "page_size": page_size
+        }
+    except Exception as e:
+        logger.error(f"Fetch datasets error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.post("/api/datasets/paths")
+async def get_dataset_paths(
+    dataset_ids: list[int] = Body(...),
+    current_user: User = Depends(get_current_active_user)
+):
     try:
         with db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT id, user_id, title, content, created_at, updated_at
-                    FROM markdown_documents
-                    WHERE user_id = %s
-                    ORDER BY updated_at DESC
+                    SELECT id, path
+                    FROM datasets
+                    WHERE id = ANY(%s)
                     """,
-                    (current_user.id,)
+                    (dataset_ids,)
                 )
-                markdowns = cur.fetchall()
-        # Ensure markdowns is a list; fetchall() should return a list, but be explicit
-        return markdowns if isinstance(markdowns, list) else []
+                datasets = cur.fetchall()
+                paths = [dataset['path'] for dataset in datasets if dataset['path']]
+                return {"paths": paths}
     except Exception as e:
-        logger.error(f"Failed to fetch markdowns: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to fetch markdowns")
-    
-@app.put("/api/markdowns/{markdown_id}")
-async def update_markdown(
-    markdown_id: int,
-    markdown: MarkdownUpdate,
+        logger.error(f"Fetch dataset paths error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/my-datasets")
+async def list_my_datasets(
+    filename_filter: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     current_user: User = Depends(get_current_active_user)
 ):
     try:
-        with db_transaction() as conn:
+        with db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Check if markdown exists and belongs to user
-                cur.execute(
-                    """
-                    SELECT id, user_id
-                    FROM markdown_documents
-                    WHERE id = %s AND user_id = %s
-                    """,
-                    (markdown_id, current_user.id)
-                )
-                if not cur.fetchone():
-                    raise HTTPException(status_code=404, detail="Markdown not found or not authorized")
-
-                # Build update query dynamically
-                update_fields = []
-                update_values = []
-                if markdown.title is not None:
-                    update_fields.append("title = %s")
-                    update_values.append(markdown.title)
-                if markdown.content is not None:
-                    update_fields.append("content = %s")
-                    update_values.append(markdown.content)
-
-                if not update_fields:
-                    raise HTTPException(status_code=400, detail="No fields to update")
-
-                update_values.append(markdown_id)
-                update_values.append(current_user.id)
-                query = f"""
-                    UPDATE markdown_documents
-                    SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s AND user_id = %s
-                    RETURNING id, user_id, title, content, created_at, updated_at
+                base_query = """
+                    SELECT id, filename, uploader_type, category, description, size, path, upload_date
+                    FROM datasets
+                    WHERE uploader_type = 'user' AND uploader_id = %s
                 """
-                cur.execute(query, update_values)
-                updated_markdown = cur.fetchone()
-                if not updated_markdown:
-                    raise HTTPException(status_code=404, detail="Markdown not found")
-        return updated_markdown
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to update markdown: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to update markdown")
+                count_query = "SELECT COUNT(*) FROM datasets WHERE uploader_type = 'user' AND uploader_id = %s"
+                params = [current_user.id]
 
-@app.delete("/api/markdowns/{markdown_id}")
-async def delete_markdown(
-    markdown_id: int,
+                if filename_filter:
+                    base_query += " AND LOWER(filename) LIKE LOWER(%s)"
+                    count_query += " AND LOWER(filename) LIKE LOWER(%s)"
+                    params.append(f"%{filename_filter}%")
+
+                cur.execute(count_query, params)
+                total = cur.fetchone()['count']
+
+                base_query += " ORDER BY upload_date DESC LIMIT %s OFFSET %s"
+                params.extend([page_size, (page - 1) * page_size])
+
+                cur.execute(base_query, params)
+                datasets = cur.fetchall()
+
+                logger.debug(f"My datasets fetched: {len(datasets)} for user {current_user.username}")
+        return {
+            "datasets": datasets,
+            "total": total,
+            "page": page,
+            "page_size": page_size
+        }
+    except Exception as e:
+        logger.error(f"Fetch my datasets error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/pending-uploads")
+async def list_pending_uploads(current_user: User = Depends(get_current_active_user)):
+    try:
+        uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.id))
+        os.makedirs(uploads_dir, exist_ok=True)
+        files = []
+        for filename in os.listdir(uploads_dir):
+            file_path = os.path.join(uploads_dir, filename)
+            if os.path.isfile(file_path):
+                file_size = os.path.getsize(file_path)
+                files.append({
+                    "filename": filename,
+                    "size": file_size,
+                    "path": file_path
+                })
+        logger.debug(f"Pending uploads fetched: {len(files)} for user {current_user.username}")
+        return {"files": files}
+    except Exception as e:
+        logger.error(f"Fetch pending uploads error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching pending uploads: {str(e)}")
+
+@app.post("/api/upload-from-pending")
+async def upload_from_pending(
+    filename: str = Form(...),
+    category: str = Form("uncategorized"),
+    description: str = Form(None),
     current_user: User = Depends(get_current_active_user)
 ):
+    if not filename.endswith(('.zip', '.tar.gz')):
+        raise HTTPException(status_code=400, detail="Only .zip or .tar.gz files are allowed")
+
+    if len(category) > 50:
+        raise HTTPException(status_code=400, detail="Category must not exceed 50 characters")
+
+    uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.id))
+    source_path = os.path.join(uploads_dir, filename)
+    if not os.path.exists(source_path):
+        raise HTTPException(status_code=404, detail="File not found in uploads folder")
+
+    storage_dir = os.path.join(USER_STORAGE_DIR, str(current_user.id))
+    os.makedirs(storage_dir, exist_ok=True)
+    destination_path = os.path.join(storage_dir, filename)
+
     try:
+        with db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM datasets WHERE filename = %s AND uploader_id = %s",
+                    (filename, current_user.id)
+                )
+                if cur.fetchone()['count'] > 0:
+                    raise HTTPException(status_code=400, detail="File already exists in datasets")
+
+        file_size = os.path.getsize(source_path)
         with db_transaction() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
-                    DELETE FROM markdown_documents
-                    WHERE id = %s AND user_id = %s
-                    RETURNING id
+                    INSERT INTO datasets (filename, uploader_type, uploader_id, category, description, size, path)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (markdown_id, current_user.id)
+                    (filename, "user", current_user.id, category, description, file_size, destination_path)
                 )
-                deleted_markdown = cur.fetchone()
-                if not deleted_markdown:
-                    raise HTTPException(status_code=404, detail="Markdown not found or not authorized")
-        return {"message": "Markdown deleted successfully"}
-    except HTTPException:
-        raise
+        shutil.copy2(source_path, destination_path)
+        os.remove(source_path)
+
+        logger.info(f"Uploaded file from pending: {filename} by {current_user.username}")
+        return {"filename": filename, "message": "Upload successful"}
     except Exception as e:
-        logger.error(f"Failed to delete markdown: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to delete markdown")
+        logger.error(f"Upload from pending error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+
+@app.delete("/api/pending-uploads/{filename}")
+async def delete_pending_upload(filename: str, current_user: User = Depends(get_current_active_user)):
+    uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.id))
+    file_path = os.path.join(uploads_dir, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found in uploads folder")
+    try:
+        os.remove(file_path)
+        logger.info(f"Deleted pending upload: {filename} by {current_user.username}")
+        return {"message": "File deleted successfully"}
+    except Exception as e:
+        logger.error(f"Delete pending upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
     
 
 @app.get("/{full_path:path}")
