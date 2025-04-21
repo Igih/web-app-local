@@ -111,6 +111,7 @@
           >
             <el-form-item label="Sample Images (Exactly 1~6 required)">
               <el-upload
+                :key="uploadKey"
                 :file-list="newCategory.images"
                 :http-request="handleNewImageUpload"
                 accept="image/*"
@@ -138,6 +139,7 @@
                     size="small" 
                     @click="handleImageRemove(image, newCategory.images)"
                     class="remove-btn"
+                    :loading="submitting.value"
                   >
                     Remove
                   </el-button>
@@ -147,9 +149,9 @@
             </el-form-item>
             <el-form-item label="Description">
               <el-input v-model="newCategory.description" 
-              type="textarea" 
-              :rows="4" 
-              placeholder="Enter description" 
+                type="textarea" 
+                :rows="4" 
+                placeholder="Enter description" 
               />
             </el-form-item>
             <el-form-item label="Category" prop="category" required>
@@ -481,7 +483,7 @@ const uploadForm = ref({
 const uploadFormRef = ref(null)
 const categoriesList = ref([])
 const categoriesLoading = ref(false)
-
+const uploadKey = ref(0);
 const rules = {
   category: [
     { required: true, message: 'Category is required', trigger: 'blur' },
@@ -537,10 +539,9 @@ const showUploadDialog = () => {
 }
 
 const showNewCategoryDialog = () => {
-  newCategoryDialogVisible.value = true
-  newCategory.value = { images: [], description: '', category: '', count: null }
-  categoryForm.value?.resetFields()
-}
+  newCategoryDialogVisible.value = true;
+  resetCategoryForm();
+};
 
 const handleUploadClose = (done) => {
   ElMessageBox.confirm('Are you sure to close without saving?')
@@ -555,12 +556,11 @@ const handleUploadClose = (done) => {
 const handleNewCategoryClose = (done) => {
   ElMessageBox.confirm('Are you sure to close without saving?')
     .then(() => {
-      newCategory.value = { images: [], description: '', category: '', count: null }
-      categoryForm.value?.resetFields()
-      done()
+      resetCategoryForm();
+      done();
     })
-    .catch(() => {})
-}
+    .catch(() => {});
+};
 
 const fetchCategoriesForDropdown = async () => {
   try {
@@ -573,6 +573,14 @@ const fetchCategoriesForDropdown = async () => {
     categoriesLoading.value = false
   }
 }
+
+// Helper function to reset the category form
+const resetCategoryForm = () => {
+  newCategory.value = { images: [], description: '', category: '', count: null };
+  uploadKey.value += 1;
+  categoryForm.value?.resetFields();
+};
+
 
 // Handle file selection
 const handleFileChange = (file, fileList) => {
@@ -712,96 +720,97 @@ const beforeImageUpload = (file) => {
   return true
 }
 
+// Handle new image upload
 const handleNewImageUpload = async (options) => {
   try {
-    await beforeImageUpload(options.file)
-    newCategory.value.images.push({ name: options.file.name, file: options.file })
+    await beforeImageUpload(options.file);
+    newCategory.value.images.push({ name: options.file.name, file: options.file });
   } catch (error) {
-    console.error('Image upload rejected:', error.message)
+    console.error('Image upload rejected:', error.message);
   }
-}
+};
 
 const getImagePreview = (file) => {
   return URL.createObjectURL(file)
 }
 
+// Handle image removal
 const handleImageRemove = (file, fileList) => {
-  const index = fileList.findIndex(f => f.uid === file.uid || f.name === file.name)
-  if (index !== -1) {
-    fileList.splice(index, 1)
-  }
-}
+  newCategory.value.images = newCategory.value.images.filter(f => f !== file);
+};
 
 const handleExceed = () => {
   ElMessage.warning('You can only upload 6 images')
 }
 
+// Submit new category
 const submitNewCategory = async () => {
   try {
-    await categoryForm.value.validate()
+    await categoryForm.value.validate();
   } catch (error) {
-    ElMessage.error('Please fix the form errors before submitting')
-    return
+    ElMessage.error('Please fix the form errors before submitting');
+    return;
   }
 
   if (newCategory.value.images.length === 0 || newCategory.value.images.length > 6) {
-    ElMessage.error('Please upload between 1 and 6 images')
-    return
+    ElMessage.error('Please upload between 1 and 6 images');
+    return;
   }
   if (!newCategory.value.category) {
-    ElMessage.error('Category is required')
-    return
+    ElMessage.error('Category is required');
+    return;
   }
   if (newCategory.value.category.length > 6) {
-    ElMessage.error('Category must not exceed 6 characters')
-    return
+    ElMessage.error('Category must not exceed 6 characters');
+    return;
   }
   if (newCategory.value.count === null || 
       isNaN(newCategory.value.count) || 
       !Number.isInteger(newCategory.value.count)) {
-    ElMessage.error('Category count must be an integer')
-    return
+    ElMessage.error('Category count must be an integer');
+    return;
   }
 
   if (!authStore.token) {
-    ElMessage.error('Please login to add categories')
-    return
+    ElMessage.error('Please login to add categories');
+    return;
   }
 
-  const formData = new FormData()
+  const formData = new FormData();
   newCategory.value.images.forEach((image) => {
-    formData.append('images', image.file)
-  })
-  formData.append('description', newCategory.value.description)
-  formData.append('category', newCategory.value.category.toLowerCase())
-  formData.append('count', newCategory.value.count)
+    formData.append('images', image.file);
+  });
+  formData.append('description', newCategory.value.description);
+  formData.append('category', newCategory.value.category.toLowerCase());
+  formData.append('count', newCategory.value.count);
 
   try {
-    submitting.value = true
+    submitting.value = true;
     await axios.post('/api/categories_show', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
-        'Authorization': `Bearer ${authStore.token}` // 添加 Authorization 头
-      }
-    })
-    ElMessage.success('Category added successfully')
-    newCategory.value = { images: [], description: '', category: '', count: null }
-    fetchCategoriesShow()
+        'Authorization': `Bearer ${authStore.token}`,
+      },
+    });
+    ElMessage.success('Category added successfully');
+    resetCategoryForm();
+    newCategoryDialogVisible.value = false;
+    fetchCategoriesShow();
   } catch (error) {
     if (error.response?.status === 401) {
-      ElMessage.error('Session expired, please login again')
-      authStore.logout()
-      window.location.href = '/'
+      ElMessage.error('Session expired, please login again');
+      authStore.logout();
+      window.location.href = '/';
     } else if (error.response?.status === 403) {
-      ElMessage.error('Admin privileges required to add categories')
+      ElMessage.error('Admin privileges required to add categories');
     } else {
-      const errorMsg = error.response?.data?.detail || 'Failed to add category: ' + error.message
-      ElMessage.error(errorMsg)
+      const errorMsg = error.response?.data?.detail || 'Failed to add category: ' + error.message;
+      ElMessage.error(errorMsg);
     }
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
-}
+};
 
 const showCountDialog = (row) => {
   currentRow.value = row
