@@ -60,6 +60,11 @@
           v-if="authStore.currentUser && authStore.currentUser.role === 'user'"
         >
           <Icon icon="mdi:database" class="menu-icon" />
+          <img 
+            src="/icons/book-open-page-variant.svg" 
+            alt="Document Icon"
+            class="menu-icon"
+          />
           <span>My Data</span>
         </el-menu-item>
         <el-menu-item 
