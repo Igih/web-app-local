@@ -1,4 +1,4 @@
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Form
 import os
 import shutil
 import logging
@@ -9,7 +9,7 @@ from fastapi import Query, Depends, Body
 from psycopg2.extras import RealDictCursor
 from fastapi.responses import FileResponse
 from utils.db import db_connection, db_transaction
-from config import ADMIN_STORAGE_DIR, USER_STORAGE_DIR, DESCRIPTION_DIR
+from config import ADMIN_STORAGE_DIR, USER_STORAGE_DIR, DESCRIPTION_DIR, UPLOADS_DIR
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -290,3 +290,86 @@ async def get_dataset_paths(
         logger.error(f"Fetch dataset paths error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
+async def list_pending_uploads(current_user: User = Depends(get_current_active_user)):
+    try:
+        uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.id))
+        os.makedirs(uploads_dir, exist_ok=True)
+        files = []
+        for filename in os.listdir(uploads_dir):
+            file_path = os.path.join(uploads_dir, filename)
+            if os.path.isfile(file_path):
+                file_size = os.path.getsize(file_path)
+                files.append({
+                    "filename": filename,
+                    "size": file_size,
+                    "path": file_path
+                })
+        logger.debug(f"Pending uploads fetched: {len(files)} for user {current_user.username}")
+        return {"files": files}
+    except Exception as e:
+        logger.error(f"Fetch pending uploads error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching pending uploads: {str(e)}")
+
+async def upload_from_pending(
+    filename: str = Form(...),
+    category: str = Form("uncategorized"),
+    description: str = Form(None),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not filename.endswith(('.zip', '.tar.gz', '.rar')):
+        raise HTTPException(status_code=400, detail="Only .zip , .rar or .tar.gz files are allowed")
+
+    if len(category) > 50:
+        raise HTTPException(status_code=400, detail="Category must not exceed 50 characters")
+
+    uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.id))
+    source_path = os.path.join(uploads_dir, filename)
+    if not os.path.exists(source_path):
+        raise HTTPException(status_code=404, detail="File not found in uploads folder")
+
+    storage_dir = os.path.join(USER_STORAGE_DIR, str(current_user.id))
+    os.makedirs(storage_dir, exist_ok=True)
+    destination_path = os.path.join(storage_dir, filename)
+
+    try:
+        with db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM datasets WHERE filename = %s AND uploader_id = %s",
+                    (filename, current_user.id)
+                )
+                if cur.fetchone()['count'] > 0:
+                    raise HTTPException(status_code=400, detail="File already exists in datasets")
+
+        file_size = os.path.getsize(source_path)
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    INSERT INTO datasets (filename, uploader_type, uploader_id, category, description, size, path)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (filename, "user", current_user.id, category, description, file_size, destination_path)
+                )
+        shutil.copy2(source_path, destination_path)
+        os.remove(source_path)
+
+        logger.info(f"Uploaded file from pending: {filename} by {current_user.username}")
+        return {"filename": filename, "message": "Upload successful"}
+    except Exception as e:
+        logger.error(f"Upload from pending error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+
+
+async def delete_pending_upload(filename: str, current_user: User = Depends(get_current_active_user)):
+    uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.id))
+    file_path = os.path.join(uploads_dir, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found in uploads folder")
+    try:
+        os.remove(file_path)
+        logger.info(f"Deleted pending upload: {filename} by {current_user.username}")
+        return {"message": "File deleted successfully"}
+    except Exception as e:
+        logger.error(f"Delete pending upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")

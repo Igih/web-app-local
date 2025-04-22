@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, Body, HTT
 from fastapi.responses import FileResponse
 from models.dataset import DatasetUpdate
 from models.user import User
-from services.dataset import upload_zip, download_zip, list_datasets, list_my_datasets, update_dataset, delete_dataset, get_dataset_paths
+from services.dataset import upload_zip, download_zip, list_datasets, list_my_datasets, \
+                             update_dataset, delete_dataset, get_dataset_paths, \
+                             delete_pending_upload, upload_from_pending, list_pending_uploads
 from services.auth import get_current_active_user
 from typing import Optional, List
 
@@ -66,3 +68,25 @@ async def download(
     dataset_id: int
 ):
     return await download_zip(dataset_id)
+
+@router.get("/pending-uploads")
+async def list_pending(
+    current_user: User = Depends(get_current_active_user)
+):
+    return await list_pending_uploads(current_user)
+
+@router.post("/upload-from-pending")
+async def upload_pending(
+    filename: str = Form(...),
+    category: str = Form("uncategorized"),
+    description: str = Form(None),
+    current_user: User = Depends(get_current_active_user)
+):
+    return await upload_from_pending(filename, category, description, current_user)
+
+@router.delete("/pending-uploads/{filename}")
+async def delete_pending(
+    filename: str, 
+    current_user: User = Depends(get_current_active_user)
+):
+    return await delete_pending_upload(filename, current_user)

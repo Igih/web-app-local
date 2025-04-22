@@ -5,7 +5,12 @@
       <el-card class="dataset-card shadow-lg">
         <template #header>
           <div class="card-header flex justify-between items-center">
-            <span class="text-xl font-semibold text-gray-800">Pending Uploads</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xl font-semibold text-gray-800">Pending Uploads</span>
+              <span class="text-sm text-gray-500">
+                (note: scp /home/linux/codes/datasets/pendingUploads/{{ authStore.currentUser.id }})
+              </span>
+            </div>
             <el-button type="primary" @click="fetchPendingUploads" :loading="pendingLoading">
               Refresh
             </el-button>
