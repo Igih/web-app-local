@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+psycopg2-binary
+pydantic
+python-jose
+passlib[bcrypt]
+tenacity
+python-multipart
+aiofiles
+asyncpg
+apscheduler
+python-jose[cryptography]
+python-dotenv
