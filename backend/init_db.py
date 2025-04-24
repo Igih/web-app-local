@@ -45,7 +45,7 @@ def init_db():
                         id SERIAL PRIMARY KEY,
                         filename VARCHAR(255) NOT NULL,
                         uploader_type VARCHAR(10) NOT NULL,
-                        uploader_id INTEGER NOT NULL REFERENCES users(id),
+                        uploader_id INTEGER REFERENCES users(id),
                         category VARCHAR(50) NOT NULL,
                         description TEXT,
                         size BIGINT NOT NULL,
