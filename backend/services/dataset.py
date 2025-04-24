@@ -186,7 +186,7 @@ async def update_dataset(
         with db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
-                    "SELECT uploader_type, uploader_id, filename FROM datasets WHERE id = %s",
+                    "SELECT uploader_type, uploader_id, filename, path FROM datasets WHERE id = %s",
                     (dataset_id,)
                 )
                 dataset = cur.fetchone()
@@ -205,9 +205,28 @@ async def update_dataset(
                 raise HTTPException(status_code=400, detail="Category must not exceed 50 characters")
             update_fields.append("category = %s")
             update_values.append(update.categories)
+        if update.filename is not None:
+            if not update.filename:
+                raise HTTPException(status_code=400, detail="Filename cannot be empty")
+            original_suffix = dataset['filename'].rsplit('.', 1)[-1] if '.' in dataset['filename'] else ''
+            input_suffix = update.filename.rsplit('.', 1)[-1] if '.' in update.filename else ''
+            allowed_extensions = {'zip', 'tar.gz', 'rar'}
+            if original_suffix not in allowed_extensions:
+                raise HTTPException(status_code=400, detail="Original filename has an invalid extension")
+            # Preserve original suffix if input suffix differs or is missing
+            final_filename = update.filename if input_suffix == original_suffix else update.filename.rsplit('.', 1)[0] + '.' + original_suffix
+            storage_dir = os.path.dirname(dataset['path'])
+            new_file_path = os.path.join(storage_dir, final_filename)
+            if os.path.exists(new_file_path):
+                raise HTTPException(status_code=400, detail="Filename already exists")
+            update_fields.append("filename = %s")
+            update_values.append(final_filename)
+            update_fields.append("path = %s")
+            update_values.append(new_file_path)
+
         if not update_fields:
             logger.warning(f"No fields to update for dataset {dataset_id}. Payload: {update.dict()}")
-            raise HTTPException(status_code=400, detail="No fields to update. Ensure 'categories' or 'description' is provided.")
+            raise HTTPException(status_code=400, detail="No fields to update. Ensure 'categories', 'description', or 'filename' is provided.")
 
         update_values.append(dataset_id)
         query = f"UPDATE datasets SET {', '.join(update_fields)} WHERE id = %s"
@@ -219,8 +238,23 @@ async def update_dataset(
                 if cur.rowcount == 0:
                     raise HTTPException(status_code=404, detail="Dataset not found after update attempt")
 
+        if update.filename is not None:
+            # Rename the actual file
+            old_file_path = dataset['path']
+            final_filename = update_values[update_fields.index("filename = %s")]  # Use the final filename
+            new_file_path = os.path.join(storage_dir, final_filename)
+            if os.path.exists(old_file_path):
+                shutil.move(old_file_path, new_file_path)
+            # Rename the description file if it exists
+            # old_txt_filename = os.path.splitext(dataset['filename'])[0] + ".txt"
+            # new_txt_filename = os.path.splitext(final_filename)[0] + ".txt"
+            # old_txt_file_path = os.path.join(DESCRIPTION_DIR, old_txt_filename)
+            # new_txt_file_path = os.path.join(DESCRIPTION_DIR, new_txt_filename)
+            # if os.path.exists(old_txt_file_path):
+            #     shutil.move(old_txt_file_path, new_txt_file_path)
+
         if current_user.role == "admin" and update.description is not None:
-            txt_filename = os.path.splitext(dataset['filename'])[0] + ".txt"
+            txt_filename = os.path.splitext(dataset['filename' if update.filename is None else final_filename])[0] + ".txt"
             txt_file_path = os.path.join(DESCRIPTION_DIR, txt_filename)
             with open(txt_file_path, "w", encoding="utf-8") as txt_file:
                 txt_file.write(update.description)

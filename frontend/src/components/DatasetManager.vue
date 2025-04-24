@@ -301,7 +301,7 @@
             <el-form-item label="Category">
               <el-input
                 v-model="uploadForm.category"
-                placeholder="Enter a category (defaults to uncategorized)"
+                placeholder="class 1 、class 1、class 3... (defaults to uncategorized)"
                 type="textarea" 
                 :rows="1" 
                 :maxlength="50" 

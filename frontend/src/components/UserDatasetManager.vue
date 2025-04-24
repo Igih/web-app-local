@@ -64,7 +64,16 @@
           </div>
         </template>
         <el-table v-loading="loading" :data="datasets" style="width: 100%">
-          <el-table-column prop="filename" label="File Name" />
+          <el-table-column label="File Name">
+            <template #default="scope">
+              <div class="filename-cell">
+                <span :title="scope.row.filename">{{ scope.row.filename }}</span>
+                <el-button type="primary" size="small" @click="showEditFilenameDialog(scope.row)">
+                  Edit
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="Category" width="200">
             <template #default="scope">
               <div class="category-cell">
@@ -151,7 +160,7 @@
         <el-form-item label="Category">
           <el-input
             v-model="uploadForm.category"
-            placeholder="Enter a category (defaults to uncategorized)"
+            placeholder="class 1 、class 1、class 3..."
             style="width: 100%"
           />
         </el-form-item>
@@ -212,7 +221,7 @@
         <el-form-item label="Category">
           <el-input
             v-model="pendingUploadForm.category"
-            placeholder="Enter a category (defaults to uncategorized)"
+            placeholder="class 1 、class 1、class 3..."
             style="width: 100%"
           />
         </el-form-item>
@@ -250,12 +259,28 @@
     <el-dialog title="Edit Category" v-model="editCategoryDialogVisible" width="30%" :before-close="handleCategoryClose">
       <el-input
         v-model="currentCategory"
-        placeholder="Enter category (defaults to uncategorized)"
+        placeholder="class 1 、class 1、class 3..."
       />
       <template #footer>
         <span class="dialog-footer flex gap-4">
           <el-button @click="editCategoryDialogVisible = false">Cancel</el-button>
           <el-button type="primary" @click="submitCategory" :loading="submittingCategory">Submit</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    <el-dialog title="Edit Filename" v-model="editFilenameDialogVisible" width="30%" :before-close="handleFilenameClose">
+      <el-form :model="{ currentFilename }" :rules="filenameRules" ref="filenameFormRef" label-position="top">
+        <el-form-item label="New Filename" prop="currentFilename">
+          <el-input
+            v-model="currentFilename"
+            placeholder="Enter new filename (extension will be preserved)"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer flex gap-4">
+          <el-button @click="editFilenameDialogVisible = false">Cancel</el-button>
+          <el-button type="primary" @click="submitFilename" :loading="submittingFilename">Submit</el-button>
         </span>
       </template>
     </el-dialog>
@@ -275,12 +300,12 @@ const uploadStore = useUploadStore()
 
 const uploadForm = ref({
   file: null,
-  category: 'uncategorized',
+  category: 'class 1 、class 1、class 3...',
   description: ''
 })
 const pendingUploadForm = ref({
   filename: '',
-  category: 'uncategorized',
+  category: 'class 1 、class 1、class 3...',
   description: ''
 })
 const uploadFormRef = ref(null)
@@ -303,10 +328,62 @@ const currentDescription = ref('')
 const currentCategory = ref('')
 const currentRow = ref(null)
 const searchQuery = ref('')
+const editFilenameDialogVisible = ref(false)
+const currentFilename = ref('')
+const submittingFilename = ref(false)
 
 const uploadRules = ref({
   file: [{ required: true, message: 'Please select a file', trigger: 'change' }]
 })
+
+const filenameFormRef = ref(null)
+const filenameRules = ref({
+  currentFilename: [
+    { required: true, message: 'Please enter a filename', trigger: 'blur' }
+  ]
+})
+
+const showEditFilenameDialog = (row) => {
+  currentRow.value = row
+  // Display filename without suffix
+  currentFilename.value = row.filename.replace(/\.(zip|tar\.gz|rar)$/i, '')
+  editFilenameDialogVisible.value = true
+}
+
+const submitFilename = async () => {
+  filenameFormRef.value.validate(async (valid) => {
+    if (valid) {
+      try {
+        submittingFilename.value = true
+        // Append original suffix to the entered filename
+        const originalSuffix = currentRow.value.filename.match(/\.(zip|tar\.gz|rar)$/i)?.[0]
+        if (!originalSuffix) {
+          ElMessage.error('Original filename has an invalid extension')
+          return
+        }
+        const newFilename = currentFilename.value + originalSuffix
+        await axios.put(
+          `/api/datasets/${currentRow.value.id}`,
+          { filename: newFilename },
+          { headers: { Authorization: `Bearer ${authStore.token}` } }
+        )
+        ElMessage.success('Filename updated')
+        editFilenameDialogVisible.value = false
+        fetchDatasets()
+      } catch (error) {
+        ElMessage.error(error.response?.data?.detail || 'Failed to update filename')
+      } finally {
+        submittingFilename.value = false
+      }
+    }
+  })
+}
+
+const handleFilenameClose = (done) => {
+  ElMessageBox.confirm('Are you sure to close without saving?')
+    .then(() => done())
+    .catch(() => {})
+}
 
 const canSubmit = computed(() => {
   return uploadForm.value.file
@@ -409,7 +486,7 @@ const submitUpload = async () => {
         await axios.post('/api/upload', formData, config)
         ElMessage.success('Upload successful')
         uploadForm.value.file = null
-        uploadForm.value.category = 'uncategorized'
+        uploadForm.value.category = 'class 1 、class 1、class 3...'
         uploadForm.value.description = ''
         uploadFormRef.value.resetFields()
         dialogVisible.value = false
@@ -448,7 +525,7 @@ const handleUploadDialogClose = (done) => {
 
 const showPendingUploadDialog = (row) => {
   pendingUploadForm.value.filename = row.filename
-  pendingUploadForm.value.category = 'uncategorized'
+  pendingUploadForm.value.category = 'class 1 、class 1、class 3...'
   pendingUploadForm.value.description = ''
   pendingUploadDialogVisible.value = true
 }
@@ -540,7 +617,7 @@ const showEditDialog = (row) => {
 
 const showEditCategoryDialog = (row) => {
   currentRow.value = row
-  currentCategory.value = row.category || 'uncategorized'
+  currentCategory.value = row.category || 'class 1 、class 1、class 3...'
   editCategoryDialogVisible.value = true
 }
 
@@ -605,7 +682,7 @@ const formatDate = (date) => {
 }
 
 const truncate = (text, length) => {
-  if (!text) return 'uncategorized'
+  if (!text) return 'class 1 、class 1、class 3...'
   if (text.length <= length) return text
   return text.substring(0, length) + '...'
 }
@@ -705,6 +782,21 @@ onMounted(() => {
 }
 
 .category-cell span {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filename-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0 0.5rem;
+}
+
+.filename-cell span {
   flex-grow: 1;
   overflow: hidden;
   text-overflow: ellipsis;

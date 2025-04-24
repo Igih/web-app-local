@@ -4,7 +4,8 @@
     <el-row class="toolbar" :gutter="20">
       <el-col :span="12">
         <el-button type="primary" @click="createNewMarkdown">
-          <Icon icon="mdi:plus" class="btn-icon" /> New Markdown
+          <!-- <Icon icon="mdi:plus" class="btn-icon" />  -->
+          New Markdown
         </el-button>
         <el-button @click="toggleSidebar">
           <Icon :icon="isSidebarCollapsed ? 'mdi:chevron-right' : 'mdi:chevron-left'" />
@@ -14,7 +15,7 @@
       <el-col :span="12" class="search-col">
         <el-input
           v-model="searchQuery"
-          placeholder="Search by title..."
+          placeholder="Search by title or content..."
           clearable
           @input="filterMarkdowns"
         >
