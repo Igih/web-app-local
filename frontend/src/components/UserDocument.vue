@@ -46,7 +46,8 @@
           <el-table-column width="100">
             <template #default="{ row }">
               <el-button type="primary" size="small" circle @click.stop="openRenameDialog(row)">
-                <Icon icon="mdi:pencil" />
+                <!-- <Icon icon="mdi:pencil" /> -->
+                <img src="/icons/pencil-outline.svg" alt="Pencil Icon" class="white-icon" />
               </el-button>
               <el-popconfirm
                 title="Are you sure to delete this?"
@@ -54,7 +55,8 @@
               >
                 <template #reference>
                   <el-button type="danger" size="small" circle>
-                    <Icon icon="mdi:delete" />
+                    <!-- <Icon icon="mdi:delete" /> -->
+                    <img src="/icons/trash-can-outline.svg" alt="Pencil Icon" class="white-icon" />
                   </el-button>
                 </template>
               </el-popconfirm>
@@ -167,6 +169,17 @@ const renameDialogVisible = ref(false)
 const newTitle = ref('')
 const markdownToRename = ref(null)
 
+// Configure marked with GFM and table support
+marked.setOptions({
+  gfm: true,
+  tables: true,
+  breaks: true,
+  pedantic: false,
+  sanitize: false, // DOMPurify handles sanitization
+  smartLists: true,
+  smartypants: false
+})
+
 const fetchMarkdowns = async () => {
   try {
     const response = await axios.get('/api/markdowns', {
@@ -246,8 +259,8 @@ const saveMarkdown = async () => {
 const deleteMarkdown = async (id) => {
   try {
     await axios.delete(`/api/markdowns/${id}`, {
-      headers: { Authorization: `Bearer ${authStore.currentUser.token}` }
-    })
+      headers: { Authorization: `Bearer ${authStore.currentUser.token}` } }
+    )
     markdowns.value = markdowns.value.filter((md) => md.id !== id)
     filteredMarkdowns.value = markdowns.value
     if (selectedMarkdown.value?.id === id) {
@@ -515,6 +528,28 @@ textarea {
   overflow-x: auto;
 }
 
+.preview :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  background-color: #fff;
+}
+
+.preview :deep(th, td) {
+  border: 1px solid #e8ecef;
+  padding: 8px;
+  text-align: left;
+}
+
+.preview :deep(th) {
+  background-color: #f5f7fa;
+  font-weight: 600;
+}
+
+.preview :deep(tr:nth-child(even)) {
+  background-color: #fafafa;
+}
+
 .status-bar {
   padding: 10px;
   border-top: 1px solid #e8ecef;
@@ -533,5 +568,11 @@ textarea {
 
 :deep(.selected-row) {
   background-color: #e6f7ff !important;
+}
+
+.white-icon {
+  filter: brightness(0) invert(1); /* 将黑色图标转换为白色 */
+  width: 16px;
+  height: 16px;
 }
 </style>

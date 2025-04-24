@@ -137,7 +137,8 @@
       circle
       @click="scrollToTop"
     >
-      <Icon icon="mdi:arrow-up" class="top-icon" />
+      <!-- <Icon icon="mdi:arrow-up" class="top-icon" /> -->
+      <img src="/icons/arrow-up-thin.svg" alt="Arrow-up Icon" class="white-icon" />
     </el-button>
   </div>
 </template>
@@ -653,4 +654,11 @@ onUnmounted(() => {
   margin: 0;
   flex-grow: 1;
 }
+
+.white-icon {
+  filter: brightness(0) invert(1); /* 将黑色图标转换为白色 */
+  width: 28px;
+  height: 40px;
+}
+
 </style>
