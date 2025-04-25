@@ -21,7 +21,7 @@ DB_CONFIG = {
 BASE_STORAGE_DIR = os.getenv("STORAGE_DIR", "/home/linux/datasets")
 ADMIN_STORAGE_DIR = os.path.join(BASE_STORAGE_DIR, "admin")
 USER_STORAGE_DIR = os.path.join(BASE_STORAGE_DIR, "users")
-UPLOADS_DIR = os.path.join(BASE_STORAGE_DIR, "pendingUploads")
+UPLOADS_DIR = os.path.join(BASE_STORAGE_DIR, "pending_uploads")
 DESCRIPTION_DIR = os.path.join(BASE_STORAGE_DIR, "dataset_descriptions")
 IMAGES_DIR = os.path.join(BASE_STORAGE_DIR, "category_images")
 

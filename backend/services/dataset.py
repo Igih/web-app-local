@@ -338,10 +338,10 @@ async def list_pending_uploads(current_user: User = Depends(get_current_active_u
                     "size": file_size,
                     "path": file_path
                 })
-        logger.debug(f"Pending uploads fetched: {len(files)} for user {current_user.username}")
+        # logger.debug(f"Pending uploads fetched: {len(files)} for user {current_user.username}")
         return {"files": files}
     except Exception as e:
-        logger.error(f"Fetch pending uploads error: {str(e)}")
+        # logger.error(f"Fetch pending uploads error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching pending uploads: {str(e)}")
 
 async def upload_from_pending(
@@ -356,10 +356,10 @@ async def upload_from_pending(
     if len(category) > 50:
         raise HTTPException(status_code=400, detail="Category must not exceed 50 characters")
 
-    uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.id))
+    uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.username))
     source_path = os.path.join(uploads_dir, filename)
     if not os.path.exists(source_path):
-        raise HTTPException(status_code=404, detail="File not found in uploads folder")
+        raise HTTPException(status_code=404, detail="File not found in pending-uploads folder")
 
     storage_dir = os.path.join(USER_STORAGE_DIR, str(current_user.id))
     os.makedirs(storage_dir, exist_ok=True)
@@ -396,14 +396,14 @@ async def upload_from_pending(
 
 
 async def delete_pending_upload(filename: str, current_user: User = Depends(get_current_active_user)):
-    uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.id))
+    uploads_dir = os.path.join(UPLOADS_DIR, str(current_user.username))
     file_path = os.path.join(uploads_dir, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found in uploads folder")
     try:
         os.remove(file_path)
-        logger.info(f"Deleted pending upload: {filename} by {current_user.username}")
+        # logger.info(f"Deleted pending upload: {filename} by {current_user.username}")
         return {"message": "File deleted successfully"}
     except Exception as e:
-        logger.error(f"Delete pending upload error: {str(e)}")
+        # logger.error(f"Delete pending upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")

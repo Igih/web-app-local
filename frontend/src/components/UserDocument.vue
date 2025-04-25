@@ -5,10 +5,11 @@
       <el-col :span="12">
         <el-button type="primary" @click="createNewMarkdown">
           <!-- <Icon icon="mdi:plus" class="btn-icon" />  -->
+          <img src="/icons/file-plus-outline.svg" alt="File-plus Icon" class="btn-icon" />
           New Markdown
         </el-button>
         <el-button @click="toggleSidebar">
-          <Icon :icon="isSidebarCollapsed ? 'mdi:chevron-right' : 'mdi:chevron-left'" />
+          <!-- <Icon :icon="isSidebarCollapsed ? 'mdi:chevron-right' : 'mdi:chevron-left'" /> -->
           {{ isSidebarCollapsed ? 'Expand' : 'Collapse' }} Sidebar
         </el-button>
       </el-col>
@@ -416,6 +417,9 @@ onBeforeUnmount(async () => {
 }
 
 .btn-icon {
+  filter: brightness(0) invert(1); /* 将黑色图标转换为白色 */
+  width: 16px;
+  height: 16px;
   margin-right: 5px;
 }
 

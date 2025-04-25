@@ -11,7 +11,7 @@ app = FastAPI()
 # Create storage directories
 os.makedirs(os.path.join(BASE_STORAGE_DIR, "admin"), exist_ok=True)
 os.makedirs(os.path.join(BASE_STORAGE_DIR, "users"), exist_ok=True)
-os.makedirs(os.path.join(BASE_STORAGE_DIR, "uploads"), exist_ok=True)
+os.makedirs(os.path.join(BASE_STORAGE_DIR, "pending_uploads"), exist_ok=True)
 os.makedirs(os.path.join(BASE_STORAGE_DIR, "dataset_descriptions"), exist_ok=True)
 os.makedirs(IMAGES_DIR, exist_ok=True)
 

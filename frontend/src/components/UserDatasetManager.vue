@@ -8,7 +8,7 @@
             <div class="flex items-center gap-2">
               <span class="text-xl font-semibold text-gray-800">Pending Uploads</span>
               <span class="text-sm text-gray-500">
-                (note: scp /home/linux/codes/datasets/pendingUploads/{{ authStore.currentUser.username }})
+                (note: scp sources app@12.1.1.73:/data/datasets/pending_uploads/{{ authStore.currentUser.username }})
               </span>
             </div>
             <el-button type="primary" @click="fetchPendingUploads" :loading="pendingLoading">
@@ -246,7 +246,7 @@
 
     <!-- Edit Description Dialog -->
     <el-dialog title="Edit Description" v-model="editDialogVisible" width="30%" :before-close="handleClose">
-      <el-input v-model="currentDescription" type="textarea" :rows="4" placeholder="Enter description" />
+      <el-input v-model="currentDescription" type="textarea" :rows="16" placeholder="Enter description" />
       <template #footer>
         <span class="dialog-footer flex gap-4">
           <el-button @click="editDialogVisible = false">Cancel</el-button>
@@ -268,8 +268,15 @@
         </span>
       </template>
     </el-dialog>
+    <!-- Edit Filename Dialog -->
     <el-dialog title="Edit Filename" v-model="editFilenameDialogVisible" width="30%" :before-close="handleFilenameClose">
-      <el-form :model="{ currentFilename }" :rules="filenameRules" ref="filenameFormRef" label-position="top">
+      <el-form 
+        :model="{ currentFilename }" 
+        :rules="filenameRules" 
+        ref="filenameFormRef" 
+        label-position="top"
+        @submit.prevent
+      >
         <el-form-item label="New Filename" prop="currentFilename">
           <el-input
             v-model="currentFilename"

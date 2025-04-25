@@ -354,7 +354,7 @@
 
       <!-- Existing Dialogs remain unchanged -->
       <el-dialog title="Edit Description" v-model="dialogVisible" width="30%" :before-close="handleClose">
-        <el-input v-model="currentDescription" type="textarea" :rows="4" placeholder="Enter description" />
+        <el-input v-model="currentDescription" type="textarea" :rows="16" placeholder="Enter description" />
         <template #footer>
           <span class="dialog-footer">
             <el-button @click="dialogVisible = false">Cancel</el-button>

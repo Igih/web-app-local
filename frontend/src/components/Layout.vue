@@ -87,7 +87,8 @@
           index="6" 
           @click="goToDatasetManager"
         >
-          <Icon icon="mdi:cog" class="menu-icon" />
+          <!-- <Icon icon="mdi:cog" class="menu-icon" /> -->
+          <img src="/icons/cog-refresh-outline.svg" alt="Cog-refresh Icon" class="menu-icon" />
           <span>Admin</span>
         </el-menu-item>
       </el-menu>
