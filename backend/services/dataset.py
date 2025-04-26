@@ -208,13 +208,25 @@ async def update_dataset(
         if update.filename is not None:
             if not update.filename:
                 raise HTTPException(status_code=400, detail="Filename cannot be empty")
-            original_suffix = dataset['filename'].rsplit('.', 1)[-1] if '.' in dataset['filename'] else ''
-            input_suffix = update.filename.rsplit('.', 1)[-1] if '.' in update.filename else ''
+            original_filename = dataset['filename']
             allowed_extensions = {'zip', 'tar.gz', 'rar'}
+            original_suffix = None
+            if original_filename.endswith('.tar.gz'):
+                original_suffix = 'tar.gz'
+            elif '.' in original_filename:
+                original_suffix = original_filename.rsplit('.', 1)[-1]
+            else:
+                original_suffix = ''
             if original_suffix not in allowed_extensions:
                 raise HTTPException(status_code=400, detail="Original filename has an invalid extension")
             # Preserve original suffix if input suffix differs or is missing
-            final_filename = update.filename if input_suffix == original_suffix else update.filename.rsplit('.', 1)[0] + '.' + original_suffix
+            base_filename = update.filename
+            for ext in allowed_extensions:
+                if base_filename.endswith('.' + ext):
+                    base_filename = base_filename[:-len('.' + ext)]
+                    break
+            # Always append original suffix
+            final_filename = base_filename + '.' + original_suffix
             storage_dir = os.path.dirname(dataset['path'])
             new_file_path = os.path.join(storage_dir, final_filename)
             if os.path.exists(new_file_path):
