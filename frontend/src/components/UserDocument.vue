@@ -438,6 +438,7 @@ onBeforeUnmount(async () => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   padding: 10px;
   transition: width 0.3s ease;
+  height: calc(100vh - 100px);
 }
 
 .markdown-list.collapsed {
@@ -451,7 +452,7 @@ onBeforeUnmount(async () => {
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   padding: 10px;
-  height: calc(100vh - 200px);
+  height: calc(100vh - 100px);
   display: flex;
   flex-direction: column;
   transition: width 0.3s ease;
