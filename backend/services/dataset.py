@@ -397,8 +397,9 @@ async def upload_from_pending(
                     """,
                     (filename, "user", current_user.id, category, description, file_size, destination_path)
                 )
-        shutil.copy2(source_path, destination_path)
-        os.remove(source_path)
+        # shutil.copy2(source_path, destination_path)
+        # os.remove(source_path)
+        shutil.move(source_path, destination_path)
 
         logger.info(f"Uploaded file from pending: {filename} by {current_user.username}")
         return {"filename": filename, "message": "Upload successful"}
