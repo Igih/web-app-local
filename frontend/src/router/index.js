@@ -5,6 +5,7 @@ import DatasetManager from '@/components/DatasetManager.vue'
 import DatasetView from '@/components/DatasetView.vue'
 import UserDatasetManager from '@/components/UserDatasetManager.vue'
 import UserDocument from '@/components/UserDocument.vue'
+import VideoPlayer  from '@/components/VideoPlayer.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const routes = [
@@ -16,7 +17,8 @@ const routes = [
       { path: 'dataset-manager', name: 'DatasetManager', component: DatasetManager },
       { path: 'dataset/:category', name: 'DatasetView', component: DatasetView, props: true },
       { path: 'user-dataset-manager', name: 'UserDatasetManager', component:UserDatasetManager},
-      { path: 'markdown-editor', name: 'UserDocument', component: UserDocument }
+      { path: 'markdown-editor', name: 'UserDocument', component: UserDocument },
+      { path: 'user-guide', name: 'UserGuide', component: VideoPlayer },
     ]
   }
 ]

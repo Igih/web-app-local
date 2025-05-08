@@ -8,7 +8,7 @@
             <div class="flex items-center gap-2">
               <span class="text-xl font-semibold text-gray-800">Pending Uploads</span>
               <span class="text-sm text-gray-500">
-                (note: scp sources app@12.1.1.73:/data/datasets/pending_uploads/{{ authStore.currentUser.username }})
+                (note: scp sources your username@12.1.2.252:/data/web/datasets/pending_uploads/{{ authStore.currentUser.username }})
               </span>
             </div>
             <el-button type="primary" @click="fetchPendingUploads" :loading="pendingLoading">

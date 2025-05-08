@@ -330,7 +330,10 @@ async def get_dataset_paths(
                     (dataset_ids,)
                 )
                 datasets = cur.fetchall()
-                paths = [dataset['path'] for dataset in datasets if dataset['path']]
+                paths = [
+                        dataset['path'].replace('/home/linux/datasets/', '/data/web/datasets/')
+                        for dataset in datasets if dataset['path']
+                         ]
                 return {"paths": paths}
     except Exception as e:
         logger.error(f"Fetch dataset paths error: {str(e)}")

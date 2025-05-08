@@ -10,13 +10,11 @@
         :ellipsis="false"
       >
         <el-menu-item index="0" @click="goToHome">
-          <!-- <Icon icon="mdi:home" class="menu-icon" /> -->
           <img src="/icons/home.svg" alt="Home Icon" class="menu-icon" />
           <span>Home</span>
         </el-menu-item>
         <el-sub-menu index="1" :class="{ 'is-active': activeIndex === '1' }">
           <template #title>
-            <!-- <Icon icon="mdi:database" class="menu-icon" /> -->
             <img src="/icons/database-sync.svg" alt="Database-sync Icon" class="menu-icon" />
             <span>Datasets</span>
           </template>
@@ -25,13 +23,11 @@
             :key="category.id"
             @click="goToCategory(category.name)"
           >
-            <!-- <Icon :icon="category.icon" class="menu-icon" /> -->
             <span>{{ category.name }}</span>
           </el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="2">
           <template #title>
-            <!-- <Icon icon="mdi:lightbulb" class="menu-icon" /> -->
             <img src="/icons/lightbulb-on-30.svg" alt="Lightbulb-on Icon" class="menu-icon" />
             <span>Solutions</span>
           </template>
@@ -41,30 +37,29 @@
         </el-sub-menu>
         <el-sub-menu index="3">
           <template #title>
-            <!-- <Icon icon="mdi:book-open" class="menu-icon" /> -->
             <img src="/icons/book-open.svg" alt="Book-open Icon" class="menu-icon" />
             <span>Resource</span>
           </template>
           <el-menu-item index="3-1">
-            <!-- <Icon icon="mdi:drone" class="menu-icon" /> -->
             <span>Drone</span>
           </el-menu-item>
           <el-menu-item index="3-2">
-            <!-- <Icon icon="mdi:map" class="menu-icon" /> -->
             <span>Altlas</span>
           </el-menu-item>
         </el-sub-menu>
         <el-menu-item index="5">
-          <!-- <Icon icon="mdi:document" class="menu-icon" /> -->
           <img src="/icons/file-document-outline.svg" alt="File-document Icon" class="menu-icon" />
           <span>Logs</span>
+        </el-menu-item>
+        <el-menu-item index="9" @click="goToUserGuide">
+          <img src="/icons/youtube.svg" alt="Video Icon" class="menu-icon" />
+          <span>User Guide</span>
         </el-menu-item>
         <el-menu-item 
           index="7" 
           @click="goToUserDatasetManager"
           v-if="authStore.currentUser && authStore.currentUser.role === 'user'"
         >
-          <!-- <Icon icon="mdi:database" class="menu-icon" /> -->
           <img src="/icons/database-arrow-up.svg" alt="Database Icon" class="menu-icon" />
           <span>My Data</span>
         </el-menu-item>
@@ -73,12 +68,6 @@
           index="8" 
           @click="goToMarkdownEditor"
         >
-          <!-- <Icon icon="mdi:markdown" class="menu-icon" /> -->
-          <!-- <img 
-            src="/icons/book-open-page-variant.svg" 
-            alt="Document Icon"
-            class="menu-icon"
-          /> -->
           <img src="/icons/pencil-outline.svg" alt="Pencil Icon" class="menu-icon" />
           <span>My Notes</span>
         </el-menu-item>
@@ -87,7 +76,6 @@
           index="6" 
           @click="goToDatasetManager"
         >
-          <!-- <Icon icon="mdi:cog" class="menu-icon" /> -->
           <img src="/icons/cog-refresh-outline.svg" alt="Cog-refresh Icon" class="menu-icon" />
           <span>Admin</span>
         </el-menu-item>
@@ -219,7 +207,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Icon } from '@iconify/vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { ArrowDown } from '@element-plus/icons-vue'
@@ -342,6 +329,10 @@ const activeIndex = computed(() => {
     return '7'
   } else if (route.path === '/markdown-editor') {
     return '8'
+  } else if (route.path === '/user-manual') {
+    return '9'
+  } else if (route.path === '/user-guide') {
+    return '10'
   } else if (route.path.startsWith('/dataset/')) {
     return '1'
   }
@@ -409,6 +400,11 @@ const goToHome = () => {
   router.push('/')
 }
 
+
+const goToUserGuide = () => {
+  router.push('/user-guide')
+}
+
 const showLoginDialog = () => {
   loginDialogVisible.value = true
 }
@@ -420,7 +416,7 @@ const handleLogin = async () => {
     loginDialogVisible.value = false
     loginForm.value = { username: '', password: '' }
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || 'Login failed:usrname or password incorrect')
+    ElMessage.error(error.response?.data?.detail || 'Login failed: username or password incorrect')
   }
 }
 
@@ -501,7 +497,6 @@ onMounted(() => {
   fetchCategories()
 })
 </script>
-
 
 <style scoped>
 .layout-container {

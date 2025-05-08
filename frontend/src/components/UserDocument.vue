@@ -409,7 +409,7 @@ onBeforeUnmount(async () => {
 .user-dataset-manager {
   padding: 20px;
   background-color: #f5f7fa;
-  min-height: calc(100vh - 80px);
+  min-height: calc(100vh - 60px);
 }
 
 .toolbar {
