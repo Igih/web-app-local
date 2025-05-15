@@ -47,14 +47,6 @@
             <span>Atlas</span>
           </el-menu-item>
         </el-sub-menu>
-        <el-menu-item 
-          index="5" 
-          @click="goToFilePreview"
-          v-if="authStore.currentUser && authStore.currentUser.role === 'user'"
-          >
-          <img src="/icons/file-document-outline.svg" alt="File-document Icon" class="menu-icon" />
-          <span>Browse Images</span>
-        </el-menu-item>
         <el-menu-item index="9" @click="goToUserGuide">
           <img src="/icons/youtube.svg" alt="Video Icon" class="menu-icon" />
           <span>User Guide</span>
@@ -74,6 +66,14 @@
         >
           <img src="/icons/pencil-outline.svg" alt="Pencil Icon" class="menu-icon" />
           <span>My Notes</span>
+        </el-menu-item>
+        <el-menu-item 
+          index="5" 
+          @click="goToFilePreview"
+          v-if="authStore.currentUser && authStore.currentUser.role === 'user'"
+          >
+          <img src="/icons/file-document-outline.svg" alt="File-document Icon" class="menu-icon" />
+          <span>Browse Files</span>
         </el-menu-item>
         <el-menu-item 
           v-if="authStore.currentUser && authStore.currentUser.role === 'admin'" 
