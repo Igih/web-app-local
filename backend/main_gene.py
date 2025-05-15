@@ -259,21 +259,29 @@ async def browse_folder(
         full_path = sanitize_path(path)
         relative_path = os.path.relpath(full_path, DOWNLOADS_DIR)
 
+        # Check item count incrementally to avoid loading all items
+        item_count = 0
+        max_items = 100000  # Threshold for maximum allowed items
+        for item in os.scandir(full_path):  # Use scandir for better performance
+            item_count += 1
+            if item_count > max_items:
+                return FolderContent(
+                    current_path=relative_path.replace("\\", "/"),
+                    items=[],
+                    total_items=item_count,
+                    has_more=False
+                )
+
         all_items = []
         allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.txt', '.xml', '.json'}
 
-        # Count total items first to check limit
-        total_items = len([item for item in os.listdir(full_path)])
-        if total_items > 100000:
-            raise HTTPException(status_code=400, detail="Folder contains more than 100,000 items")
-
-        for item in os.listdir(full_path):
-            item_path = os.path.join(full_path, item)
-            rel_item_path = os.path.join(relative_path, item).replace("\\", "/")
+        for entry in os.scandir(full_path):
+            item_path = os.path.join(full_path, entry.name)
+            rel_item_path = os.path.join(relative_path, entry.name).replace("\\", "/")
             
-            is_directory = os.path.isdir(item_path)
+            is_directory = entry.is_dir()
             if not is_directory:
-                ext = os.path.splitext(item)[1].lower()
+                ext = os.path.splitext(entry.name)[1].lower()
                 if ext not in allowed_extensions:
                     continue
 
@@ -281,10 +289,10 @@ async def browse_folder(
             is_text = False
             is_xml = False
             is_json = False
-            modified_time = os.path.getmtime(item_path)
+            modified_time = entry.stat().st_mtime
 
             if not is_directory:
-                ext = os.path.splitext(item)[1].lower()
+                ext = os.path.splitext(entry.name)[1].lower()
                 if ext in {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif'}:
                     thumbnail = f"/browse_folders/{rel_item_path}"
                 elif ext == '.txt':
@@ -295,7 +303,7 @@ async def browse_folder(
                     is_json = True
 
             all_items.append(FolderItem(
-                name=item,
+                name=entry.name,
                 is_directory=is_directory,
                 path=rel_item_path,
                 thumbnail=thumbnail,

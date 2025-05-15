@@ -21,6 +21,9 @@
         <p :title="item.name">{{ item.name }}</p>
       </div>
     </div>
+    <div v-else-if="totalItems > 100000" class="error-message">
+      文件数量过多（超过100,000），请尝试访问子文件夹
+    </div>
     <div v-else class="empty-message">
       没有发现图片和文件~~
       <p>('.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif')</p>
@@ -64,6 +67,7 @@ export default {
     const pageSize = 100
     const hasMore = ref(false)
     const isLoading = ref(false)
+    const totalItems = ref(0)
 
     const breadcrumb = computed(() => currentPath.value.split('/').filter(segment => segment))
 
@@ -81,11 +85,16 @@ export default {
           items.value = response.data.items
         }
         hasMore.value = response.data.has_more
+        totalItems.value = response.data.total_items
       } catch (error) {
         console.error('Error fetching folder:', error)
         if (error.response?.status === 401) {
           authStore.logout()
           router.push('/')
+        } else {
+          items.value = []
+          hasMore.value = false
+          totalItems.value = 0
         }
       } finally {
         isLoading.value = false
@@ -147,6 +156,7 @@ export default {
       selectedJson,
       hasMore,
       isLoading,
+      totalItems,
       navigateTo,
       handleItemClick,
       loadMore
@@ -205,11 +215,15 @@ export default {
   gap: 10px;
 }
 
-.empty-message {
+.empty-message, .error-message {
   text-align: center;
   font-size: 18px;
   color: #666;
   margin: 20px 0;
+}
+
+.error-message {
+  color: #d32f2f;
 }
 
 .item {

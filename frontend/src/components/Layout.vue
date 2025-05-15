@@ -70,7 +70,7 @@
         <el-menu-item 
           index="5" 
           @click="goToFilePreview"
-          v-if="authStore.currentUser && authStore.currentUser.role === 'user'"
+          v-if="authStore.currentUser && authStore.currentUser.role === 'admin'" 
           >
           <img src="/icons/file-document-outline.svg" alt="File-document Icon" class="menu-icon" />
           <span>Browse Files</span>

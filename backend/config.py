@@ -25,4 +25,6 @@ UPLOADS_DIR = os.path.join(BASE_STORAGE_DIR, "pending_uploads")
 DESCRIPTION_DIR = os.path.join(BASE_STORAGE_DIR, "dataset_descriptions")
 IMAGES_DIR = os.path.join(BASE_STORAGE_DIR, "category_images")
 
+BROWSE_DIR = os.getenv("BROWSE_DIR", "/home/linux/Downloads")
+
 # print(os.getenv("DB_NAME"))
