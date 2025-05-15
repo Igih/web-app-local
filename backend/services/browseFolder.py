@@ -1,0 +1,139 @@
+from fastapi import HTTPException, Query, Depends
+import os
+from models.browseFolder import FolderContent, FolderItem
+from services.auth import get_current_active_user
+from models.user import User
+import logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+DOWNLOADS_DIR = "/home/linux/Downloads"
+
+def sanitize_path(input_path: str) -> str:
+    base_dir = DOWNLOADS_DIR
+    if not input_path.startswith(base_dir):
+        full_path = os.path.abspath(os.path.join(base_dir, input_path.lstrip("/")))
+    else:
+        full_path = os.path.abspath(input_path)
+    
+    if not full_path.startswith(base_dir):
+        raise HTTPException(status_code=403, detail="Access to path is forbidden")
+    
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Path does not exist")
+    
+    return full_path
+
+
+async def browse_folder(
+    path: str = Query("", description="Relative path to browse"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(100, ge=1, le=100, description="Number of items per page"),
+    sort_by: str = Query("name", description="Sort by: name, modified_time"),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        full_path = sanitize_path(path)
+        relative_path = os.path.relpath(full_path, DOWNLOADS_DIR)
+
+        all_items = []
+        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.txt', '.xml', '.json'}
+
+        # Count total items first to check limit
+        total_items = len([item for item in os.listdir(full_path)])
+        if total_items > 100000:
+            raise HTTPException(status_code=400, detail="Folder contains more than 100,000 items")
+
+        for item in os.listdir(full_path):
+            item_path = os.path.join(full_path, item)
+            rel_item_path = os.path.join(relative_path, item).replace("\\", "/")
+            
+            is_directory = os.path.isdir(item_path)
+            if not is_directory:
+                ext = os.path.splitext(item)[1].lower()
+                if ext not in allowed_extensions:
+                    continue
+
+            thumbnail = None
+            is_text = False
+            is_xml = False
+            is_json = False
+            modified_time = os.path.getmtime(item_path)
+
+            if not is_directory:
+                ext = os.path.splitext(item)[1].lower()
+                if ext in {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif'}:
+                    thumbnail = f"/browse_folders/{rel_item_path}"
+                elif ext == '.txt':
+                    is_text = True
+                elif ext == '.xml':
+                    is_xml = True
+                elif ext == '.json':
+                    is_json = True
+
+            all_items.append(FolderItem(
+                name=item,
+                is_directory=is_directory,
+                path=rel_item_path,
+                thumbnail=thumbnail,
+                is_text=is_text,
+                is_xml=is_xml,
+                is_json=is_json,
+                modified_time=modified_time
+            ))
+
+        # Sorting
+        if sort_by == "modified_time":
+            all_items.sort(key=lambda x: x.modified_time, reverse=(sort_order == "desc"))
+        else:  # sort by name
+            all_items.sort(key=lambda x: (not x.is_directory, x.name.lower()), reverse=(sort_order == "desc"))
+
+        objectionable_items = [item for item in all_items if any(word in item.name.lower() for word in ["porn", "xxx", "adult"])]
+        for item in objectionable_items:
+            all_items.remove(item)
+
+        total_items = len(all_items)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_items = all_items[start_idx:end_idx]
+        has_more = end_idx < total_items
+
+        return FolderContent(
+            current_path=relative_path.replace("\\", "/"),
+            items=paginated_items,
+            total_items=total_items,
+            has_more=has_more
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error browsing folder: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+async def get_file_content(
+    path: str = Query(..., description="Relative path to the text, XML, or JSON file"),
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        full_path = sanitize_path(path)
+        ext = os.path.splitext(full_path)[1].lower()
+        if ext not in {'.txt', '.xml', '.json'}:
+            raise HTTPException(status_code=400, detail="Only .txt, .xml, and .json files are supported")
+        if not os.path.isfile(full_path):
+            raise HTTPException(status_code=404, detail="File not found")
+
+        file_size = os.path.getsize(full_path)
+        if file_size > 1_048_576:
+            raise HTTPException(status_code=400, detail="File size exceeds 1MB limit")
+
+        with open(full_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+        return {"content": content}
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File is not a valid text, XML, or JSON file")
+    except Exception as e:
+        logger.error(f"Error reading file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    

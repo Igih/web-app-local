@@ -44,12 +44,16 @@
             <span>Drone</span>
           </el-menu-item>
           <el-menu-item index="3-2">
-            <span>Altlas</span>
+            <span>Atlas</span>
           </el-menu-item>
         </el-sub-menu>
-        <el-menu-item index="5">
+        <el-menu-item 
+          index="5" 
+          @click="goToFilePreview"
+          v-if="authStore.currentUser && authStore.currentUser.role === 'user'"
+          >
           <img src="/icons/file-document-outline.svg" alt="File-document Icon" class="menu-icon" />
-          <span>Logs</span>
+          <span>Browse Images</span>
         </el-menu-item>
         <el-menu-item index="9" @click="goToUserGuide">
           <img src="/icons/youtube.svg" alt="Video Icon" class="menu-icon" />
@@ -329,10 +333,10 @@ const activeIndex = computed(() => {
     return '7'
   } else if (route.path === '/markdown-editor') {
     return '8'
-  } else if (route.path === '/user-manual') {
-    return '9'
   } else if (route.path === '/user-guide') {
-    return '10'
+    return '9'
+  } else if (route.path === '/folder') {
+    return '5'
   } else if (route.path.startsWith('/dataset/')) {
     return '1'
   }
@@ -400,9 +404,12 @@ const goToHome = () => {
   router.push('/')
 }
 
-
 const goToUserGuide = () => {
   router.push('/user-guide')
+}
+
+const goToFilePreview = () => {
+  router.push('/folder')
 }
 
 const showLoginDialog = () => {
