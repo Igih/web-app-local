@@ -18,7 +18,7 @@
       <div v-for="item in items" :key="item.path" class="item" @click="handleItemClick(item)">
         <img v-if="item.thumbnail" :src="item.thumbnail" alt="Thumbnail" class="thumbnail" loading="lazy"/>
         <span v-else class="icon">{{ item.is_directory ? '📁' : item.is_text || item.is_xml || item.is_json ? '📝' : '📄' }}</span>
-        <p>{{ item.name }}</p>
+        <p :title="item.name">{{ item.name }}</p>
       </div>
     </div>
     <div v-else class="empty-message">
@@ -218,6 +218,15 @@ export default {
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 5px;
+  overflow: hidden;
+}
+
+.item p {
+  margin: 5px 0 0 0;
+  white-space: nowrap; /* Prevent text wrapping */
+  overflow: hidden; /* Hide overflowing text */
+  text-overflow: ellipsis; /* Show ellipsis for truncated text */
+  max-width: 100%; /* Ensure text stays within container */
 }
 
 .thumbnail {
