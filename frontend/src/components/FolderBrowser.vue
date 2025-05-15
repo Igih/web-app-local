@@ -34,8 +34,12 @@
       <button @click="loadMore" :disabled="isLoading">{{ isLoading ? 'Loading...' : 'Load More' }}</button>
     </div>
 
-    <div v-if="selectedImage || selectedText || selectedXml || selectedJson" class="modal" @click="selectedImage = null; selectedText = null; selectedXml = null; selectedJson = null">
-      <img v-if="selectedImage" :src="selectedImage" alt="Full Image" class="full-image" />
+    <div v-if="selectedImage || selectedText || selectedXml || selectedJson" class="modal" @click="closeModal">
+      <div class="image-preview" v-if="selectedImage" @click.stop>
+        <button class="nav-arrow left" @click="prevImage" :disabled="!hasPrevImage">◄</button>
+        <img :src="selectedImage" alt="Full Image" class="full-image" />
+        <button class="nav-arrow right" @click="nextImage" :disabled="!hasNextImage">►</button>
+      </div>
       <div v-if="selectedText || selectedXml || selectedJson" class="text-preview">
         <pre>{{ selectedText || selectedXml || selectedJson }}</pre>
       </div>
@@ -44,7 +48,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
@@ -68,8 +72,18 @@ export default {
     const hasMore = ref(false)
     const isLoading = ref(false)
     const totalItems = ref(0)
+    const selectedImageIndex = ref(-1) // Track the index of the current image
 
     const breadcrumb = computed(() => currentPath.value.split('/').filter(segment => segment))
+
+    // Compute the list of images in the current folder
+    const imageItems = computed(() => items.value.filter(item => item.thumbnail))
+
+    // Check if there is a previous image
+    const hasPrevImage = computed(() => selectedImageIndex.value > 0)
+
+    // Check if there is a next image
+    const hasNextImage = computed(() => selectedImageIndex.value < imageItems.value.length - 1)
 
     const fetchFolderContent = async (path = '', pageNum = 1, append = false) => {
       try {
@@ -86,6 +100,8 @@ export default {
         }
         hasMore.value = response.data.has_more
         totalItems.value = response.data.total_items
+        // Reset selected image index when folder content changes
+        selectedImageIndex.value = -1
       } catch (error) {
         console.error('Error fetching folder:', error)
         if (error.response?.status === 401) {
@@ -131,6 +147,7 @@ export default {
         navigateTo(item.path)
       } else if (item.thumbnail) {
         selectedImage.value = item.thumbnail
+        selectedImageIndex.value = imageItems.value.findIndex(img => img.thumbnail === item.thumbnail)
       } else if (item.is_text) {
         selectedText.value = await fetchTextContent(item.path)
       } else if (item.is_xml) {
@@ -140,9 +157,54 @@ export default {
       }
     }
 
+    const prevImage = () => {
+      if (hasPrevImage.value) {
+        selectedImageIndex.value -= 1
+        selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
+ caries
+      }
+    }
+
+    const nextImage = () => {
+      if (hasNextImage.value) {
+        selectedImageIndex.value += 1
+        selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
+      }
+    }
+
+    const closeModal = () => {
+      selectedImage.value = null
+      selectedText.value = null
+      selectedXml.value = null
+      selectedJson.value = null
+      selectedImageIndex.value = -1
+    }
+
+    // Keyboard navigation for left/right arrows and escape key
+    const handleKeydown = (event) => {
+      if (selectedImage.value || selectedText.value || selectedXml.value || selectedJson.value) {
+        if (event.key === 'Escape') {
+          closeModal()
+        } else if (selectedImage.value) {
+          if (event.key === 'ArrowLeft' && hasPrevImage.value) {
+            prevImage()
+          } else if (event.key === 'ArrowRight' && hasNextImage.value) {
+            nextImage()
+          }
+        }
+      }
+    }
+
     onMounted(() => {
       const initialPath = route.query.path || ''
       navigateTo(initialPath)
+      // Add keyboard event listener
+      window.addEventListener('keydown', handleKeydown)
+    })
+
+    onUnmounted(() => {
+      // Remove keyboard event listener
+      window.removeEventListener('keydown', handleKeydown)
     })
 
     return {
@@ -159,7 +221,12 @@ export default {
       totalItems,
       navigateTo,
       handleItemClick,
-      loadMore
+      loadMore,
+      prevImage,
+      nextImage,
+      hasPrevImage,
+      hasNextImage,
+      closeModal
     }
   }
 }
@@ -237,10 +304,10 @@ export default {
 
 .item p {
   margin: 5px 0 0 0;
-  white-space: nowrap; /* Prevent text wrapping */
-  overflow: hidden; /* Hide overflowing text */
-  text-overflow: ellipsis; /* Show ellipsis for truncated text */
-  max-width: 100%; /* Ensure text stays within container */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .thumbnail {
@@ -264,11 +331,52 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  overflow: auto; /* Enable scrolling for large images */
+}
+
+.image-preview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .full-image {
-  max-width: 90%;
-  max-height: 90%;
+  display: block; /* Keep original image size */
+}
+
+.nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.7);
+  border: none;
+  font-size: 24px;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.nav-arrow.left {
+  left: 20px;
+}
+
+.nav-arrow.right {
+  right: 20px;
+}
+
+.nav-arrow:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nav-arrow:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.nav-arrow:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
 }
 
 .text-preview {
