@@ -11,3 +11,4 @@ asyncpg
 apscheduler
 python-jose[cryptography]
 python-dotenv
+Pillow

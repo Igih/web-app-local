@@ -22,9 +22,11 @@
 
     <div v-if="items.length > 0" class="item-grid">
       <div v-for="item in items" :key="item.path" class="item" @click="handleItemClick(item)">
-        <img v-if="item.thumbnail" :src="item.thumbnail" alt="Thumbnail" class="thumbnail" loading="lazy"/>
+        <img v-if="item.thumbnail && !item.is_oversized && !item.is_corrupted" :src="item.thumbnail" alt="Thumbnail" class="thumbnail" loading="lazy"/>
         <span v-else class="icon">{{ item.is_directory ? '📁' : item.is_text || item.is_xml || item.is_json ? '📝' : '📄' }}</span>
         <p :title="item.name">{{ item.name }}</p>
+        <p v-if="item.is_corrupted" class="corrupted-message">文件损坏</p>
+        <p v-else-if="item.is_oversized" class="oversized-message">文件过大</p>
       </div>
     </div>
     <div v-else-if="totalItems > 100000" class="error-message">
@@ -44,9 +46,15 @@
       <div class="image-preview" v-if="selectedImage" @click.stop>
         <button class="nav-arrow left" @click="prevImage" :disabled="!hasPrevImage">◄</button>
         <img :src="selectedImage" alt="Full Image" class="full-image" />
-        <p class="image-filename" :title="selectedImageName || 'Filename unavailable'">
-          {{ selectedImageName || 'Filename unavailable' }}
-        </p>
+        <div class="image-info">
+          <p class="image-filename" :title="selectedImageName || 'Filename unavailable'">
+            {{ selectedImageName || 'Filename unavailable' }}
+          </p>
+          <p class="image-metadata" v-if="selectedImageResolution && selectedImageFileSize">
+            Resolution: {{ selectedImageResolution }} | Size: {{ selectedImageFileSize }}
+          </p>
+          <p class="image-metadata" v-else>Metadata unavailable</p>
+        </div>
         <button class="nav-arrow right" @click="nextImage" :disabled="!hasNextImage">►</button>
       </div>
       <div v-if="selectedText || selectedXml || selectedJson" class="text-preview">
@@ -74,6 +82,8 @@ export default {
     const inputPath = ref('')
     const selectedImage = ref(null)
     const selectedImageName = ref(null)
+    const selectedImageResolution = ref(null)
+    const selectedImageFileSize = ref(null)
     const selectedText = ref(null)
     const selectedXml = ref(null)
     const selectedJson = ref(null)
@@ -83,14 +93,32 @@ export default {
     const isLoading = ref(false)
     const totalItems = ref(0)
     const selectedImageIndex = ref(-1)
-    const totalFolders = ref(0)  // New ref for total folders
-    const totalImages = ref(0)   // New ref for total images
-    const totalTexts = ref(0)    // New ref for total texts
+    const totalFolders = ref(0)
+    const totalImages = ref(0)
+    const totalTexts = ref(0)
 
     const breadcrumb = computed(() => currentPath.value.split('/').filter(segment => segment))
     const imageItems = computed(() => items.value.filter(item => item.thumbnail))
     const hasPrevImage = computed(() => selectedImageIndex.value > 0)
     const hasNextImage = computed(() => selectedImageIndex.value < imageItems.value.length - 1)
+
+    const observeImages = () => {
+      const images = document.querySelectorAll('.thumbnail')
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target
+            img.addEventListener('load', () => {
+              // console.log(`Image loaded: ${img.src}`)
+              // Add any load-dependent logic here (e.g., update UI, log metrics)
+            }, { once: true })
+            observer.unobserve(img)
+          }
+        })
+      }, { rootMargin: '100px' })
+
+      images.forEach(img => observer.observe(img))
+    }
 
     const fetchFolderContent = async (path = '', pageNum = 1, append = false) => {
       try {
@@ -134,11 +162,19 @@ export default {
         const response = await axios.get('/api/file/content', {
           params: { path },
           headers: { Authorization: `Bearer ${authStore.token}` }
-        })
-        return response.data.content
+        });
+        return response.data.content;
       } catch (error) {
-        console.error('Error fetching content:', error)
-        return 'Error loading content'
+        console.error('Error fetching content:', error);
+        if (error.response?.status === 400 && error.response.data.detail.includes('corrupted')) {
+          return '文件损坏，无法读取内容';
+        } else if (error.response?.status === 400) {
+          return '文件大小超过1MB，无法读取';
+        } else if (error.response?.status === 404) {
+          return '文件不存在';
+        } else {
+          return '无法加载文件内容，请稍后重试';
+        }
       }
     }
 
@@ -155,29 +191,40 @@ export default {
     }
 
     const handleItemClick = async (item) => {
+      if (item.is_corrupted) {
+        alert('无法预览：文件已损坏');
+        return;
+      }
+      if (item.is_oversized) {
+        alert('无法预览：文件过大');
+        return;
+      }
       if (item.is_directory) {
-        navigateTo(item.path)
+        navigateTo(item.path);
       } else if (item.thumbnail) {
-        selectedImage.value = item.thumbnail
-        selectedImageName.value = item.name
-        const index = imageItems.value.findIndex(img => img.path === item.path)
-        selectedImageIndex.value = index
-        console.log('Selected image:', { thumbnail: item.thumbnail, path: item.path, index, filename: item.name })
+        selectedImage.value = item.thumbnail;
+        selectedImageName.value = item.name;
+        selectedImageResolution.value = item.resolution;
+        selectedImageFileSize.value = item.file_size;
+        const index = imageItems.value.findIndex(img => img.path === item.path);
+        selectedImageIndex.value = index;
       } else if (item.is_text) {
-        selectedText.value = await fetchTextContent(item.path)
+        selectedText.value = await fetchTextContent(item.path);
       } else if (item.is_xml) {
-        selectedXml.value = await fetchTextContent(item.path)
+        selectedXml.value = await fetchTextContent(item.path);
       } else if (item.is_json) {
-        selectedJson.value = await fetchTextContent(item.path)
+        selectedJson.value = await fetchTextContent(item.path);
       }
     }
 
     const prevImage = () => {
       if (hasPrevImage.value) {
-        selectedImageIndex.value -= 1
-        selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
-        selectedImageName.value = imageItems.value[selectedImageIndex.value].name
-        console.log('Previous image:', { index: selectedImageIndex.value, filename: imageItems.value[selectedImageIndex.value]?.name })
+      selectedImageIndex.value -= 1
+      selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
+      selectedImageName.value = imageItems.value[selectedImageIndex.value].name
+      selectedImageResolution.value = imageItems.value[selectedImageIndex.value].resolution
+      selectedImageFileSize.value = imageItems.value[selectedImageIndex.value].file_size
+      // console.log('Previous image:', { index: selectedImageIndex.value, filename: imageItems.value[selectedImageIndex.value]?.name })
       }
     }
 
@@ -186,13 +233,17 @@ export default {
         selectedImageIndex.value += 1
         selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
         selectedImageName.value = imageItems.value[selectedImageIndex.value].name
-        console.log('Next image:', { index: selectedImageIndex.value, filename: imageItems.value[selectedImageIndex.value]?.name })
+        selectedImageResolution.value = imageItems.value[selectedImageIndex.value].resolution
+        selectedImageFileSize.value = imageItems.value[selectedImageIndex.value].file_size
+        // console.log('Next image:', { index: selectedImageIndex.value, filename: imageItems.value[selectedImageIndex.value]?.name })
       }
     }
 
     const closeModal = () => {
       selectedImage.value = null
       selectedImageName.value = null
+      selectedImageResolution.value = null
+      selectedImageFileSize.value = null
       selectedText.value = null
       selectedXml.value = null
       selectedJson.value = null
@@ -217,6 +268,7 @@ export default {
       const initialPath = route.query.path || ''
       navigateTo(initialPath)
       window.addEventListener('keydown', handleKeydown)
+      observeImages()
     })
 
     onUnmounted(() => {
@@ -230,6 +282,8 @@ export default {
       breadcrumb,
       selectedImage,
       selectedImageName,
+      selectedImageResolution,
+      selectedImageFileSize,
       selectedText,
       selectedXml,
       selectedJson,
@@ -296,6 +350,8 @@ export default {
   padding: 5px 10px;
   margin-left: 10px;
 }
+
+
 
 .file-counts {
   margin-bottom: 20px;
@@ -377,15 +433,24 @@ export default {
   display: block;
 }
 
-.image-filename {
+.image-info {
+  text-align: center;
   margin-top: 10px;
+}
+
+.image-filename {
   color: white;
   font-size: 16px;
   max-width: 80%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: center;
+}
+
+.image-metadata {
+  color: white;
+  font-size: 14px;
+  margin-top: 5px;
 }
 
 .nav-arrow {
@@ -458,5 +523,16 @@ export default {
 .load-more button:disabled {
   background-color: #6c757d;
   cursor: not-allowed;
+}
+
+.corrupted-message {
+  color: red;
+  font-size: 12px;
+  margin-top: 5px;
+}
+.oversized-message {
+  color: orange;
+  font-size: 12px;
+  margin-top: 5px;
 }
 </style>

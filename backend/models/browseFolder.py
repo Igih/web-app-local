@@ -11,6 +11,12 @@ class FolderItem(BaseModel):
     is_xml: bool = False
     is_json: bool = False
     modified_time: Optional[float] = None
+    resolution: Optional[str]
+    file_size: Optional[str]
+    resolution: str | None = None
+    file_size: str | None = None
+    is_corrupted: Optional[bool]
+    is_oversized: Optional[bool]
 
 class FolderContent(BaseModel):
     current_path: str

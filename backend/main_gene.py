@@ -17,6 +17,8 @@ from psycopg2.pool import SimpleConnectionPool
 from tenacity import retry, stop_after_attempt, wait_fixed
 from contextlib import contextmanager
 import mimetypes
+from PIL import Image
+from functools import lru_cache
 
 app = FastAPI()
 
@@ -41,7 +43,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context= CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
 DB_CONFIG = {
@@ -119,15 +121,19 @@ class FolderItem(BaseModel):
     is_xml: bool = False
     is_json: bool = False
     modified_time: float | None = None
+    resolution: str | None = None
+    file_size: str | None = None
+    is_corrupted: bool = False  # 新增字段
+    is_oversized: bool = False  # 新增字段
 
 class FolderContent(BaseModel):
     current_path: str
     items: List[FolderItem]
     total_items: int
     has_more: bool
-    total_folders: int  # New field
-    total_images: int   # New field
-    total_texts: int    # New fie
+    total_folders: int
+    total_images: int
+    total_texts: int
 
 # Utility Functions
 def verify_password(plain_password: str, hashed_password: str):
@@ -188,7 +194,7 @@ async def admin_required(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
 
-# Database Connection Pool	Database Connection Pool
+# Database Connection Pool
 try:
     DB_POOL = SimpleConnectionPool(minconn=1, maxconn=20, **DB_CONFIG)
     logger.info("Connection pool initialized successfully")
@@ -249,6 +255,21 @@ def sanitize_path(input_path: str) -> str:
     
     return full_path
 
+@lru_cache(maxsize=1000)
+def get_image_metadata(full_path: str) -> tuple:
+    try:
+        file_size = os.path.getsize(full_path)
+        if file_size > 10_485_760:  # 10MB 限制
+            return ("Oversized", "Unknown")
+        with Image.open(full_path) as img:
+            width, height = img.size
+        file_size_kb = file_size / 1024
+        file_size_str = f"{file_size_kb:.2f} KB" if file_size_kb < 1024 else f"{file_size_kb / 1024:.2f} MB"
+        return (f"{width}x{height}", file_size_str)
+    except Exception as e:
+        logger.warning(f"Failed to get metadata for {full_path}: {str(e)}")
+        return ("Corrupted", "Unknown")
+
 @app.get("/api/folder", response_model=FolderContent)
 async def browse_folder(
     path: str = Query("", description="Relative path to browse"),
@@ -265,7 +286,7 @@ async def browse_folder(
         # Check item count incrementally to avoid loading all items
         item_count = 0
         max_items = 100000  # Threshold for maximum allowed items
-        for item in os.scandir(full_path):  # Use scandir for better performance
+        for item in os.scandir(full_path):
             item_count += 1
             if item_count > max_items:
                 return FolderContent(
@@ -299,13 +320,21 @@ async def browse_folder(
             is_xml = False
             is_json = False
             modified_time = entry.stat().st_mtime
+            resolution = None
+            file_size = None
+            is_corrupted = False  # Default value
+            is_oversized = False  # Default value
 
             if is_directory:
                 folder_count += 1
             else:
                 ext = os.path.splitext(entry.name)[1].lower()
                 if ext in {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif'}:
-                    thumbnail = f"/browse_folders/{rel_item_path}"
+                    
+                    resolution, file_size = get_image_metadata(item_path)
+                    is_corrupted = resolution == "Corrupted"
+                    is_oversized = resolution == "Oversized"
+                    thumbnail = f"/browse_folders/{rel_item_path}" if not (is_corrupted or is_oversized) else None
                     image_count += 1
                 elif ext == '.txt':
                     is_text = True
@@ -325,7 +354,11 @@ async def browse_folder(
                 is_text=is_text,
                 is_xml=is_xml,
                 is_json=is_json,
-                modified_time=modified_time
+                modified_time=modified_time,
+                resolution=resolution,
+                file_size=file_size,
+                is_corrupted=is_corrupted,
+                is_oversized=is_oversized
             ))
 
         # Sorting
@@ -364,7 +397,7 @@ async def browse_folder(
     except Exception as e:
         logger.error(f"Error browsing folder: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
 @app.get("/api/file/content")
 async def get_file_content(
     path: str = Query(..., description="Relative path to the text, XML, or JSON file"),
@@ -382,15 +415,19 @@ async def get_file_content(
         if file_size > 1_048_576:
             raise HTTPException(status_code=400, detail="File size exceeds 1MB limit")
 
-        with open(full_path, 'r', encoding='utf-8') as file:
-            content = file.read()
-        return {"content": content}
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="File is not a valid text, XML, or JSON file")
+        try:
+            with open(full_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+            return {"content": content}
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=400, detail="File is corrupted or not a valid text, XML, or JSON file")
+    except HTTPException as e:
+        raise e
     except Exception as e:
         logger.error(f"Error reading file: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
+
 @app.post("/api/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     user = authenticate_user(form_data.username, form_data.password)
