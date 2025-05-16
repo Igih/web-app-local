@@ -125,6 +125,9 @@ class FolderContent(BaseModel):
     items: List[FolderItem]
     total_items: int
     has_more: bool
+    total_folders: int  # New field
+    total_images: int   # New field
+    total_texts: int    # New fie
 
 # Utility Functions
 def verify_password(plain_password: str, hashed_password: str):
@@ -269,11 +272,17 @@ async def browse_folder(
                     current_path=relative_path.replace("\\", "/"),
                     items=[],
                     total_items=item_count,
-                    has_more=False
+                    has_more=False,
+                    total_folders=0,
+                    total_images=0,
+                    total_texts=0
                 )
 
         all_items = []
         allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.txt', '.xml', '.json'}
+        folder_count = 0
+        image_count = 0
+        text_count = 0
 
         for entry in os.scandir(full_path):
             item_path = os.path.join(full_path, entry.name)
@@ -291,16 +300,22 @@ async def browse_folder(
             is_json = False
             modified_time = entry.stat().st_mtime
 
-            if not is_directory:
+            if is_directory:
+                folder_count += 1
+            else:
                 ext = os.path.splitext(entry.name)[1].lower()
                 if ext in {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif'}:
                     thumbnail = f"/browse_folders/{rel_item_path}"
+                    image_count += 1
                 elif ext == '.txt':
                     is_text = True
+                    text_count += 1
                 elif ext == '.xml':
                     is_xml = True
+                    text_count += 1
                 elif ext == '.json':
                     is_json = True
+                    text_count += 1
 
             all_items.append(FolderItem(
                 name=entry.name,
@@ -322,6 +337,12 @@ async def browse_folder(
         objectionable_items = [item for item in all_items if any(word in item.name.lower() for word in ["porn", "xxx", "adult"])]
         for item in objectionable_items:
             all_items.remove(item)
+            if item.is_directory:
+                folder_count -= 1
+            elif item.thumbnail:
+                image_count -= 1
+            elif item.is_text or item.is_xml or item.is_json:
+                text_count -= 1
 
         total_items = len(all_items)
         start_idx = (page - 1) * page_size
@@ -333,14 +354,17 @@ async def browse_folder(
             current_path=relative_path.replace("\\", "/"),
             items=paginated_items,
             total_items=total_items,
-            has_more=has_more
+            has_more=has_more,
+            total_folders=folder_count,
+            total_images=image_count,
+            total_texts=text_count
         )
     except HTTPException as e:
         raise e
     except Exception as e:
         logger.error(f"Error browsing folder: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
+    
 @app.get("/api/file/content")
 async def get_file_content(
     path: str = Query(..., description="Relative path to the text, XML, or JSON file"),

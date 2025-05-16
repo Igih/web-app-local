@@ -17,3 +17,6 @@ class FolderContent(BaseModel):
     items: List[FolderItem]
     total_items: int
     has_more: bool
+    total_folders: int  # New field
+    total_images: int   # New field
+    total_texts: int    # New fie

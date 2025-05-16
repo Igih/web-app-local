@@ -14,6 +14,12 @@
       <button @click="navigateTo(inputPath)">Go</button>
     </div>
 
+    <div class="file-counts">
+      <span>文件夹: {{ totalFolders }}</span>
+      <span>图片: {{ totalImages }}</span>
+      <span>文本: {{ totalTexts }}</span>
+    </div>
+
     <div v-if="items.length > 0" class="item-grid">
       <div v-for="item in items" :key="item.path" class="item" @click="handleItemClick(item)">
         <img v-if="item.thumbnail" :src="item.thumbnail" alt="Thumbnail" class="thumbnail" loading="lazy"/>
@@ -38,6 +44,9 @@
       <div class="image-preview" v-if="selectedImage" @click.stop>
         <button class="nav-arrow left" @click="prevImage" :disabled="!hasPrevImage">◄</button>
         <img :src="selectedImage" alt="Full Image" class="full-image" />
+        <p class="image-filename" :title="selectedImageName || 'Filename unavailable'">
+          {{ selectedImageName || 'Filename unavailable' }}
+        </p>
         <button class="nav-arrow right" @click="nextImage" :disabled="!hasNextImage">►</button>
       </div>
       <div v-if="selectedText || selectedXml || selectedJson" class="text-preview">
@@ -64,6 +73,7 @@ export default {
     const items = ref([])
     const inputPath = ref('')
     const selectedImage = ref(null)
+    const selectedImageName = ref(null)
     const selectedText = ref(null)
     const selectedXml = ref(null)
     const selectedJson = ref(null)
@@ -72,17 +82,14 @@ export default {
     const hasMore = ref(false)
     const isLoading = ref(false)
     const totalItems = ref(0)
-    const selectedImageIndex = ref(-1) // Track the index of the current image
+    const selectedImageIndex = ref(-1)
+    const totalFolders = ref(0)  // New ref for total folders
+    const totalImages = ref(0)   // New ref for total images
+    const totalTexts = ref(0)    // New ref for total texts
 
     const breadcrumb = computed(() => currentPath.value.split('/').filter(segment => segment))
-
-    // Compute the list of images in the current folder
     const imageItems = computed(() => items.value.filter(item => item.thumbnail))
-
-    // Check if there is a previous image
     const hasPrevImage = computed(() => selectedImageIndex.value > 0)
-
-    // Check if there is a next image
     const hasNextImage = computed(() => selectedImageIndex.value < imageItems.value.length - 1)
 
     const fetchFolderContent = async (path = '', pageNum = 1, append = false) => {
@@ -100,7 +107,9 @@ export default {
         }
         hasMore.value = response.data.has_more
         totalItems.value = response.data.total_items
-        // Reset selected image index when folder content changes
+        totalFolders.value = response.data.total_folders
+        totalImages.value = response.data.total_images
+        totalTexts.value = response.data.total_texts
         selectedImageIndex.value = -1
       } catch (error) {
         console.error('Error fetching folder:', error)
@@ -111,6 +120,9 @@ export default {
           items.value = []
           hasMore.value = false
           totalItems.value = 0
+          totalFolders.value = 0
+          totalImages.value = 0
+          totalTexts.value = 0
         }
       } finally {
         isLoading.value = false
@@ -147,7 +159,10 @@ export default {
         navigateTo(item.path)
       } else if (item.thumbnail) {
         selectedImage.value = item.thumbnail
-        selectedImageIndex.value = imageItems.value.findIndex(img => img.thumbnail === item.thumbnail)
+        selectedImageName.value = item.name
+        const index = imageItems.value.findIndex(img => img.path === item.path)
+        selectedImageIndex.value = index
+        console.log('Selected image:', { thumbnail: item.thumbnail, path: item.path, index, filename: item.name })
       } else if (item.is_text) {
         selectedText.value = await fetchTextContent(item.path)
       } else if (item.is_xml) {
@@ -161,7 +176,8 @@ export default {
       if (hasPrevImage.value) {
         selectedImageIndex.value -= 1
         selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
- caries
+        selectedImageName.value = imageItems.value[selectedImageIndex.value].name
+        console.log('Previous image:', { index: selectedImageIndex.value, filename: imageItems.value[selectedImageIndex.value]?.name })
       }
     }
 
@@ -169,18 +185,20 @@ export default {
       if (hasNextImage.value) {
         selectedImageIndex.value += 1
         selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
+        selectedImageName.value = imageItems.value[selectedImageIndex.value].name
+        console.log('Next image:', { index: selectedImageIndex.value, filename: imageItems.value[selectedImageIndex.value]?.name })
       }
     }
 
     const closeModal = () => {
       selectedImage.value = null
+      selectedImageName.value = null
       selectedText.value = null
       selectedXml.value = null
       selectedJson.value = null
       selectedImageIndex.value = -1
     }
 
-    // Keyboard navigation for left/right arrows and escape key
     const handleKeydown = (event) => {
       if (selectedImage.value || selectedText.value || selectedXml.value || selectedJson.value) {
         if (event.key === 'Escape') {
@@ -198,12 +216,10 @@ export default {
     onMounted(() => {
       const initialPath = route.query.path || ''
       navigateTo(initialPath)
-      // Add keyboard event listener
       window.addEventListener('keydown', handleKeydown)
     })
 
     onUnmounted(() => {
-      // Remove keyboard event listener
       window.removeEventListener('keydown', handleKeydown)
     })
 
@@ -213,6 +229,7 @@ export default {
       inputPath,
       breadcrumb,
       selectedImage,
+      selectedImageName,
       selectedText,
       selectedXml,
       selectedJson,
@@ -226,7 +243,11 @@ export default {
       nextImage,
       hasPrevImage,
       hasNextImage,
-      closeModal
+      closeModal,
+      imageItems,
+      totalFolders,
+      totalImages,
+      totalTexts
     }
   }
 }
@@ -263,7 +284,7 @@ export default {
 }
 
 .path-input {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .path-input input {
@@ -274,6 +295,16 @@ export default {
 .path-input button {
   padding: 5px 10px;
   margin-left: 10px;
+}
+
+.file-counts {
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #333;
+}
+
+.file-counts span {
+  margin-right: 20px;
 }
 
 .item-grid {
@@ -331,18 +362,30 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  overflow: auto; /* Enable scrolling for large images */
+  overflow: auto;
 }
 
 .image-preview {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
 }
 
 .full-image {
-  display: block; /* Keep original image size */
+  display: block;
+}
+
+.image-filename {
+  margin-top: 10px;
+  color: white;
+  font-size: 16px;
+  max-width: 80%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
 }
 
 .nav-arrow {
