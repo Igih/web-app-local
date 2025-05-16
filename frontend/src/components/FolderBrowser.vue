@@ -20,7 +20,10 @@
       <span>文本: {{ totalTexts }}</span>
     </div>
 
-    <div v-if="items.length > 0" class="item-grid">
+    <div v-if="isLoading && items.length === 0" class="loading-message">
+      正在加载～～
+    </div>
+    <div v-else-if="items.length > 0" class="item-grid">
       <div v-for="item in items" :key="item.path" class="item" @click="handleItemClick(item)">
         <img v-if="item.thumbnail && !item.is_oversized && !item.is_corrupted" :src="item.thumbnail" alt="Thumbnail" class="thumbnail" loading="lazy"/>
         <span v-else class="icon">{{ item.is_directory ? '📁' : item.is_text || item.is_xml || item.is_json ? '📝' : '📄' }}</span>
@@ -50,10 +53,13 @@
           <p class="image-filename" :title="selectedImageName || 'Filename unavailable'">
             {{ selectedImageName || 'Filename unavailable' }}
           </p>
-          <p class="image-metadata" v-if="selectedImageResolution && selectedImageFileSize">
-            Resolution: {{ selectedImageResolution }} | Size: {{ selectedImageFileSize }}
-          </p>
-          <p class="image-metadata" v-else>Metadata unavailable</p>
+          <button v-if="showMoreInfoBtn" class="more-info-btn" @click="fetchImageInfo">More Info</button>
+          <div v-if="showImageInfo" class="image-metadata">
+            <p v-if="selectedImageResolution && selectedImageFileSize">
+              Resolution: {{ selectedImageResolution }} | Size: {{ selectedImageFileSize }}
+            </p>
+            <p v-else>Metadata unavailable</p>
+          </div>
         </div>
         <button class="nav-arrow right" @click="nextImage" :disabled="!hasNextImage">►</button>
       </div>
@@ -96,6 +102,8 @@ export default {
     const totalFolders = ref(0)
     const totalImages = ref(0)
     const totalTexts = ref(0)
+    const showImageInfo = ref(false)
+    const showMoreInfoBtn = ref(true) // 新增：控制“More Info”按钮显示
 
     const breadcrumb = computed(() => currentPath.value.split('/').filter(segment => segment))
     const imageItems = computed(() => items.value.filter(item => item.thumbnail))
@@ -110,7 +118,6 @@ export default {
             const img = entry.target
             img.addEventListener('load', () => {
               // console.log(`Image loaded: ${img.src}`)
-              // Add any load-dependent logic here (e.g., update UI, log metrics)
             }, { once: true })
             observer.unobserve(img)
           }
@@ -162,19 +169,39 @@ export default {
         const response = await axios.get('/api/file/content', {
           params: { path },
           headers: { Authorization: `Bearer ${authStore.token}` }
-        });
-        return response.data.content;
+        })
+        return response.data.content
       } catch (error) {
-        console.error('Error fetching content:', error);
+        console.error('Error fetching content:', error)
         if (error.response?.status === 400 && error.response.data.detail.includes('corrupted')) {
-          return '文件损坏，无法读取内容';
+          return '文件损坏，无法读取内容'
         } else if (error.response?.status === 400) {
-          return '文件大小超过1MB，无法读取';
+          return '文件大小超过1MB，无法读取'
         } else if (error.response?.status === 404) {
-          return '文件不存在';
+          return '文件不存在'
         } else {
-          return '无法加载文件内容，请稍后重试';
+          return '无法加载文件内容，请稍后重试'
         }
+      }
+    }
+
+    const fetchImageInfo = async () => {
+      try {
+        const path = imageItems.value[selectedImageIndex.value].path
+        const response = await axios.get('/api/image/info', {
+          params: { path },
+          headers: { Authorization: `Bearer ${authStore.token}` }
+        })
+        selectedImageResolution.value = response.data.resolution
+        selectedImageFileSize.value = response.data.file_size
+        showImageInfo.value = true
+        showMoreInfoBtn.value = false // 隐藏“More Info”按钮
+      } catch (error) {
+        console.error('Error fetching image info:', error)
+        selectedImageResolution.value = null
+        selectedImageFileSize.value = null
+        showImageInfo.value = true
+        showMoreInfoBtn.value = false // 即使出错也隐藏按钮
       }
     }
 
@@ -192,39 +219,42 @@ export default {
 
     const handleItemClick = async (item) => {
       if (item.is_corrupted) {
-        alert('无法预览：文件已损坏');
-        return;
+        alert('无法预览：文件已损坏')
+        return
       }
       if (item.is_oversized) {
-        alert('无法预览：文件过大');
-        return;
+        alert('无法预览：文件过大')
+        return
       }
       if (item.is_directory) {
-        navigateTo(item.path);
+        navigateTo(item.path)
       } else if (item.thumbnail) {
-        selectedImage.value = item.thumbnail;
-        selectedImageName.value = item.name;
-        selectedImageResolution.value = item.resolution;
-        selectedImageFileSize.value = item.file_size;
-        const index = imageItems.value.findIndex(img => img.path === item.path);
-        selectedImageIndex.value = index;
+        selectedImage.value = item.thumbnail
+        selectedImageName.value = item.name
+        selectedImageResolution.value = null
+        selectedImageFileSize.value = null
+        showImageInfo.value = false
+        showMoreInfoBtn.value = true // 显示“More Info”按钮
+        const index = imageItems.value.findIndex(img => img.path === item.path)
+        selectedImageIndex.value = index
       } else if (item.is_text) {
-        selectedText.value = await fetchTextContent(item.path);
+        selectedText.value = await fetchTextContent(item.path)
       } else if (item.is_xml) {
-        selectedXml.value = await fetchTextContent(item.path);
+        selectedXml.value = await fetchTextContentiterals(item.path)
       } else if (item.is_json) {
-        selectedJson.value = await fetchTextContent(item.path);
+        selectedJson.value = await fetchTextContent(item.path)
       }
     }
 
     const prevImage = () => {
       if (hasPrevImage.value) {
-      selectedImageIndex.value -= 1
-      selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
-      selectedImageName.value = imageItems.value[selectedImageIndex.value].name
-      selectedImageResolution.value = imageItems.value[selectedImageIndex.value].resolution
-      selectedImageFileSize.value = imageItems.value[selectedImageIndex.value].file_size
-      // console.log('Previous image:', { index: selectedImageIndex.value, filename: imageItems.value[selectedImageIndex.value]?.name })
+        selectedImageIndex.value -= 1
+        selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
+        selectedImageName.value = imageItems.value[selectedImageIndex.value].name
+        selectedImageResolution.value = null
+        selectedImageFileSize.value = null
+        showImageInfo.value = false
+        showMoreInfoBtn.value = true // 显示“More Info”按钮
       }
     }
 
@@ -233,9 +263,10 @@ export default {
         selectedImageIndex.value += 1
         selectedImage.value = imageItems.value[selectedImageIndex.value].thumbnail
         selectedImageName.value = imageItems.value[selectedImageIndex.value].name
-        selectedImageResolution.value = imageItems.value[selectedImageIndex.value].resolution
-        selectedImageFileSize.value = imageItems.value[selectedImageIndex.value].file_size
-        // console.log('Next image:', { index: selectedImageIndex.value, filename: imageItems.value[selectedImageIndex.value]?.name })
+        selectedImageResolution.value = null
+        selectedImageFileSize.value = null
+        showImageInfo.value = false
+        showMoreInfoBtn.value = true // 显示“More Info”按钮
       }
     }
 
@@ -248,6 +279,8 @@ export default {
       selectedXml.value = null
       selectedJson.value = null
       selectedImageIndex.value = -1
+      showImageInfo.value = false
+      showMoreInfoBtn.value = true // 重置为显示“More Info”按钮
     }
 
     const handleKeydown = (event) => {
@@ -301,7 +334,10 @@ export default {
       imageItems,
       totalFolders,
       totalImages,
-      totalTexts
+      totalTexts,
+      fetchImageInfo,
+      showImageInfo,
+      showMoreInfoBtn
     }
   }
 }
@@ -351,8 +387,6 @@ export default {
   margin-left: 10px;
 }
 
-
-
 .file-counts {
   margin-bottom: 20px;
   font-size: 14px;
@@ -369,11 +403,15 @@ export default {
   gap: 10px;
 }
 
-.empty-message, .error-message {
+.loading-message, .empty-message, .error-message {
   text-align: center;
   font-size: 18px;
   color: #666;
   margin: 20px 0;
+}
+
+.loading-message {
+  color: #333;
 }
 
 .error-message {
@@ -453,6 +491,20 @@ export default {
   margin-top: 5px;
 }
 
+.more-info-btn {
+  padding: 5px 10px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.more-info-btn:hover {
+  background-color: #0056b3;
+}
+
 .nav-arrow {
   position: absolute;
   top: 50%;
@@ -530,6 +582,7 @@ export default {
   font-size: 12px;
   margin-top: 5px;
 }
+
 .oversized-message {
   color: orange;
   font-size: 12px;

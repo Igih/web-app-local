@@ -43,7 +43,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Password hashing
-pwd_context= CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
 DB_CONFIG = {
@@ -121,10 +121,8 @@ class FolderItem(BaseModel):
     is_xml: bool = False
     is_json: bool = False
     modified_time: float | None = None
-    resolution: str | None = None
-    file_size: str | None = None
-    is_corrupted: bool = False  # 新增字段
-    is_oversized: bool = False  # 新增字段
+    is_corrupted: bool = False
+    is_oversized: bool = False
 
 class FolderContent(BaseModel):
     current_path: str
@@ -134,6 +132,10 @@ class FolderContent(BaseModel):
     total_folders: int
     total_images: int
     total_texts: int
+
+class ImageInfo(BaseModel):
+    resolution: str | None = None
+    file_size: str | None = None
 
 # Utility Functions
 def verify_password(plain_password: str, hashed_password: str):
@@ -285,7 +287,7 @@ async def browse_folder(
 
         # Check item count incrementally to avoid loading all items
         item_count = 0
-        max_items = 100000  # Threshold for maximum allowed items
+        max_items = 100000
         for item in os.scandir(full_path):
             item_count += 1
             if item_count > max_items:
@@ -320,21 +322,24 @@ async def browse_folder(
             is_xml = False
             is_json = False
             modified_time = entry.stat().st_mtime
-            resolution = None
-            file_size = None
-            is_corrupted = False  # Default value
-            is_oversized = False  # Default value
+            is_corrupted = False
+            is_oversized = False
 
             if is_directory:
                 folder_count += 1
             else:
                 ext = os.path.splitext(entry.name)[1].lower()
                 if ext in {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif'}:
-                    
-                    resolution, file_size = get_image_metadata(item_path)
-                    is_corrupted = resolution == "Corrupted"
-                    is_oversized = resolution == "Oversized"
-                    thumbnail = f"/browse_folders/{rel_item_path}" if not (is_corrupted or is_oversized) else None
+                    file_size = os.path.getsize(item_path)
+                    if file_size > 10_485_760:  # 10MB 限制
+                        is_oversized = True
+                    else:
+                        try:
+                            with Image.open(item_path) as img:
+                                img.verify()  # 验证图片完整性
+                            thumbnail = f"/browse_folders/{rel_item_path}"
+                        except Exception:
+                            is_corrupted = True
                     image_count += 1
                 elif ext == '.txt':
                     is_text = True
@@ -355,8 +360,6 @@ async def browse_folder(
                 is_xml=is_xml,
                 is_json=is_json,
                 modified_time=modified_time,
-                resolution=resolution,
-                file_size=file_size,
                 is_corrupted=is_corrupted,
                 is_oversized=is_oversized
             ))
@@ -364,7 +367,7 @@ async def browse_folder(
         # Sorting
         if sort_by == "modified_time":
             all_items.sort(key=lambda x: x.modified_time, reverse=(sort_order == "desc"))
-        else:  # sort by name
+        else:
             all_items.sort(key=lambda x: (not x.is_directory, x.name.lower()), reverse=(sort_order == "desc"))
 
         objectionable_items = [item for item in all_items if any(word in item.name.lower() for word in ["porn", "xxx", "adult"])]
@@ -398,6 +401,30 @@ async def browse_folder(
         logger.error(f"Error browsing folder: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+@app.get("/api/image/info", response_model=ImageInfo)
+async def get_image_info(
+    path: str = Query(..., description="Relative path to the image file"),
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        full_path = sanitize_path(path)
+        ext = os.path.splitext(full_path)[1].lower()
+        if ext not in {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif'}:
+            raise HTTPException(status_code=400, detail="Only image files are supported")
+        if not os.path.isfile(full_path):
+            raise HTTPException(status_code=404, detail="File not found")
+
+        resolution, file_size = get_image_metadata(full_path)
+        if resolution == "Oversized" or resolution == "Corrupted":
+            raise HTTPException(status_code=400, detail="Image is oversized or corrupted")
+
+        return ImageInfo(resolution=resolution, file_size=file_size)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching image info: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 @app.get("/api/file/content")
 async def get_file_content(
     path: str = Query(..., description="Relative path to the text, XML, or JSON file"),
@@ -426,7 +453,6 @@ async def get_file_content(
     except Exception as e:
         logger.error(f"Error reading file: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
 
 @app.post("/api/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
