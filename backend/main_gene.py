@@ -333,13 +333,14 @@ async def browse_folder(
                     file_size = os.path.getsize(item_path)
                     if file_size > 10_485_760:  # 10MB 限制
                         is_oversized = True
-                    else:
-                        try:
-                            with Image.open(item_path) as img:
-                                img.verify()  # 验证图片完整性
-                            thumbnail = f"/browse_folders/{rel_item_path}"
-                        except Exception:
-                            is_corrupted = True
+                    # else:
+                    #     try:
+                    #         with Image.open(item_path) as img:
+                    #             img.verify()  # 验证图片完整性
+                    #         thumbnail = f"/browse_folders/{rel_item_path}"
+                    #     except Exception:
+                    #         is_corrupted = True
+                    thumbnail = f"/browse_folders/{rel_item_path}"
                     image_count += 1
                 elif ext == '.txt':
                     is_text = True

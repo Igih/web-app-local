@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Query, Depends
 import os
-from models.browseFolder import FolderContent, FolderItem
+from models.browseFolder import FolderContent, FolderItem, ImageInfo
 from services.auth import get_current_active_user
 from models.user import User
 import logging
@@ -41,6 +41,7 @@ def get_image_metadata(full_path: str) -> tuple:
         logger.warning(f"Failed to get metadata for {full_path}: {str(e)}")
         return ("Corrupted", "Unknown")
 
+
 async def browse_folder(
     path: str = Query("", description="Relative path to browse"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -55,7 +56,7 @@ async def browse_folder(
 
         # Check item count incrementally to avoid loading all items
         item_count = 0
-        max_items = 100000  # Threshold for maximum allowed items
+        max_items = 100000
         for item in os.scandir(full_path):
             item_count += 1
             if item_count > max_items:
@@ -90,21 +91,25 @@ async def browse_folder(
             is_xml = False
             is_json = False
             modified_time = entry.stat().st_mtime
-            resolution = None
-            file_size = None
-            is_corrupted = False  # Default value
-            is_oversized = False  # Default value
+            is_corrupted = False
+            is_oversized = False
 
             if is_directory:
                 folder_count += 1
             else:
                 ext = os.path.splitext(entry.name)[1].lower()
                 if ext in {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif'}:
-                    
-                    resolution, file_size = get_image_metadata(item_path)
-                    is_corrupted = resolution == "Corrupted"
-                    is_oversized = resolution == "Oversized"
-                    thumbnail = f"/browse_folders/{rel_item_path}" if not (is_corrupted or is_oversized) else None
+                    file_size = os.path.getsize(item_path)
+                    if file_size > 10_485_760:  # 10MB 限制
+                        is_oversized = True
+                    # else:
+                    #     try:
+                    #         with Image.open(item_path) as img:
+                    #             img.verify()  # 验证图片完整性
+                    #         thumbnail = f"/browse_folders/{rel_item_path}"
+                    #     except Exception:
+                    #         is_corrupted = True
+                    thumbnail = f"/browse_folders/{rel_item_path}"
                     image_count += 1
                 elif ext == '.txt':
                     is_text = True
@@ -125,8 +130,6 @@ async def browse_folder(
                 is_xml=is_xml,
                 is_json=is_json,
                 modified_time=modified_time,
-                resolution=resolution,
-                file_size=file_size,
                 is_corrupted=is_corrupted,
                 is_oversized=is_oversized
             ))
@@ -134,7 +137,7 @@ async def browse_folder(
         # Sorting
         if sort_by == "modified_time":
             all_items.sort(key=lambda x: x.modified_time, reverse=(sort_order == "desc"))
-        else:  # sort by name
+        else:
             all_items.sort(key=lambda x: (not x.is_directory, x.name.lower()), reverse=(sort_order == "desc"))
 
         objectionable_items = [item for item in all_items if any(word in item.name.lower() for word in ["porn", "xxx", "adult"])]
@@ -166,6 +169,30 @@ async def browse_folder(
         raise e
     except Exception as e:
         logger.error(f"Error browsing folder: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+async def get_image_info(
+    path: str = Query(..., description="Relative path to the image file"),
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        full_path = sanitize_path(path)
+        ext = os.path.splitext(full_path)[1].lower()
+        if ext not in {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif'}:
+            raise HTTPException(status_code=400, detail="Only image files are supported")
+        if not os.path.isfile(full_path):
+            raise HTTPException(status_code=404, detail="File not found")
+
+        resolution, file_size = get_image_metadata(full_path)
+        if resolution == "Oversized" or resolution == "Corrupted":
+            raise HTTPException(status_code=400, detail="Image is oversized or corrupted")
+
+        return ImageInfo(resolution=resolution, file_size=file_size)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching image info: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

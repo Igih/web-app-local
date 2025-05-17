@@ -11,12 +11,8 @@ class FolderItem(BaseModel):
     is_xml: bool = False
     is_json: bool = False
     modified_time: Optional[float] = None
-    resolution: Optional[str]
-    file_size: Optional[str]
-    resolution: str | None = None
-    file_size: str | None = None
-    is_corrupted: Optional[bool]
-    is_oversized: Optional[bool]
+    is_corrupted: bool = False
+    is_oversized: bool = False
 
 class FolderContent(BaseModel):
     current_path: str
@@ -26,3 +22,7 @@ class FolderContent(BaseModel):
     total_folders: int  # New field
     total_images: int   # New field
     total_texts: int    # New fie
+
+class ImageInfo(BaseModel):
+    resolution: Optional[str]
+    file_size: Optional[str]

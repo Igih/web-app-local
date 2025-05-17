@@ -474,15 +474,20 @@ export default {
 .image-info {
   text-align: center;
   margin-top: 10px;
+  background-color: rgba(0, 0, 0, 0.7); /* 添加深色半透明背景 */
+  padding: 10px 15px; /* 增加内边距以增强可读性 */
+  border-radius: 5px; /* 圆角提升美观 */
 }
 
+/* 确保 .image-filename 样式清晰 */
 .image-filename {
   color: white;
   font-size: 16px;
-  max-width: 80%;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: nowrap; /* 假设保留单行显示，若需换行可改为 normal */
   overflow: hidden;
   text-overflow: ellipsis;
+  margin: 0; /* 统一边距 */
 }
 
 .image-metadata {
@@ -491,6 +496,7 @@ export default {
   margin-top: 5px;
 }
 
+/* 调整 .more-info-btn 样式以突出显示 */
 .more-info-btn {
   padding: 5px 10px;
   background-color: #007bff;
@@ -499,11 +505,14 @@ export default {
   border-radius: 5px;
   cursor: pointer;
   margin-top: 10px;
+  transition: background-color 0.2s; /* 添加平滑过渡效果 */
 }
 
+/* 按钮悬停效果 */
 .more-info-btn:hover {
   background-color: #0056b3;
 }
+
 
 .nav-arrow {
   position: absolute;

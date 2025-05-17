@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends,  Query
 from models.user import User
 from services.auth import get_current_active_user
-from services.browseFolder import browse_folder, get_file_content
-from models.browseFolder import FolderContent
+from services.browseFolder import browse_folder, get_file_content, get_image_info
+from models.browseFolder import FolderContent, ImageInfo
 
 router = APIRouter()
 
@@ -24,3 +24,10 @@ async def get_content(
     current_user: User = Depends(get_current_active_user)
 ):
     return await get_file_content(path, current_user)
+
+@router.get("/api/image/info", response_model=ImageInfo)
+async def get_info(
+    path: str = Query(..., description="Relative path to the image file"),
+    current_user: User = Depends(get_current_active_user)
+):
+    return await get_image_info(path, current_user)
