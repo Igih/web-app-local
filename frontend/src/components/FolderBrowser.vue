@@ -240,7 +240,8 @@ export default {
       } else if (item.is_text) {
         selectedText.value = await fetchTextContent(item.path)
       } else if (item.is_xml) {
-        selectedXml.value = await fetchTextContentiterals(item.path)
+        selectedXml.value = await fetchTextContent(item.path)
+
       } else if (item.is_json) {
         selectedJson.value = await fetchTextContent(item.path)
       }
