@@ -25,7 +25,7 @@ async def get_content(
 ):
     return await get_file_content(path, current_user)
 
-@router.get("/api/image/info", response_model=ImageInfo)
+@router.get("/image/info", response_model=ImageInfo)
 async def get_info(
     path: str = Query(..., description="Relative path to the image file"),
     current_user: User = Depends(get_current_active_user)
