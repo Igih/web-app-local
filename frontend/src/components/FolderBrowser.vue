@@ -63,9 +63,14 @@
         </div>
         <button class="nav-arrow right" @click="nextImage" :disabled="!hasNextImage">►</button>
       </div>
-      <div v-if="selectedText || selectedXml || selectedJson" class="text-preview">
-        <pre>{{ selectedText || selectedXml || selectedJson }}</pre>
+      <div v-if="selectedText || selectedXml || selectedJson" class="modal" @click="closeModal">
+      <div class="text-preview" @click.stop>
+        <pre v-if="selectedText && selectedText !== '文件内容为空'">{{ selectedText }}</pre>
+        <pre v-else-if="selectedXml && selectedXml !== '文件内容为空'">{{ selectedXml }}</pre>
+        <pre v-else-if="selectedJson && selectedJson !== '文件内容为空'">{{ selectedJson }}</pre>
+        <p v-else class="empty-text-message">文件内容为空</p>
       </div>
+    </div>
     </div>
   </div>
 </template>
@@ -103,7 +108,7 @@ export default {
     const totalImages = ref(0)
     const totalTexts = ref(0)
     const showImageInfo = ref(false)
-    const showMoreInfoBtn = ref(true) // 新增：控制“More Info”按钮显示
+    const showMoreInfoBtn = ref(true)
 
     const breadcrumb = computed(() => currentPath.value.split('/').filter(segment => segment))
     const imageItems = computed(() => items.value.filter(item => item.thumbnail))
@@ -170,12 +175,15 @@ export default {
           params: { path },
           headers: { Authorization: `Bearer ${authStore.token}` }
         })
-        return response.data.content
+        if (response.data.content === "" && response.data.detail === "File is empty") {
+          return "文件内容为空"
+        }
+        return response.data.content || ""
       } catch (error) {
         console.error('Error fetching content:', error)
         if (error.response?.status === 400 && error.response.data.detail.includes('corrupted')) {
           return '文件损坏，无法读取内容'
-        } else if (error.response?.status === 400) {
+        } else if (error.response?.status === 400 && error.response.data.detail.includes('exceeds')) {
           return '文件大小超过1MB，无法读取'
         } else if (error.response?.status === 404) {
           return '文件不存在'
@@ -195,13 +203,13 @@ export default {
         selectedImageResolution.value = response.data.resolution
         selectedImageFileSize.value = response.data.file_size
         showImageInfo.value = true
-        showMoreInfoBtn.value = false // 隐藏“More Info”按钮
+        showMoreInfoBtn.value = false
       } catch (error) {
         console.error('Error fetching image info:', error)
         selectedImageResolution.value = null
         selectedImageFileSize.value = null
         showImageInfo.value = true
-        showMoreInfoBtn.value = false // 即使出错也隐藏按钮
+        showMoreInfoBtn.value = false
       }
     }
 
@@ -234,14 +242,13 @@ export default {
         selectedImageResolution.value = null
         selectedImageFileSize.value = null
         showImageInfo.value = false
-        showMoreInfoBtn.value = true // 显示“More Info”按钮
+        showMoreInfoBtn.value = true
         const index = imageItems.value.findIndex(img => img.path === item.path)
         selectedImageIndex.value = index
       } else if (item.is_text) {
         selectedText.value = await fetchTextContent(item.path)
       } else if (item.is_xml) {
         selectedXml.value = await fetchTextContent(item.path)
-
       } else if (item.is_json) {
         selectedJson.value = await fetchTextContent(item.path)
       }
@@ -255,7 +262,7 @@ export default {
         selectedImageResolution.value = null
         selectedImageFileSize.value = null
         showImageInfo.value = false
-        showMoreInfoBtn.value = true // 显示“More Info”按钮
+        showMoreInfoBtn.value = true
       }
     }
 
@@ -267,7 +274,7 @@ export default {
         selectedImageResolution.value = null
         selectedImageFileSize.value = null
         showImageInfo.value = false
-        showMoreInfoBtn.value = true // 显示“More Info”按钮
+        showMoreInfoBtn.value = true
       }
     }
 
@@ -281,7 +288,7 @@ export default {
       selectedJson.value = null
       selectedImageIndex.value = -1
       showImageInfo.value = false
-      showMoreInfoBtn.value = true // 重置为显示“More Info”按钮
+      showMoreInfoBtn.value = true
     }
 
     const handleKeydown = (event) => {
@@ -475,20 +482,19 @@ export default {
 .image-info {
   text-align: center;
   margin-top: 10px;
-  background-color: rgba(0, 0, 0, 0.7); /* 添加深色半透明背景 */
-  padding: 10px 15px; /* 增加内边距以增强可读性 */
-  border-radius: 5px; /* 圆角提升美观 */
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px 15px;
+  border-radius: 5px;
 }
 
-/* 确保 .image-filename 样式清晰 */
 .image-filename {
   color: white;
   font-size: 16px;
   max-width: 100%;
-  white-space: nowrap; /* 假设保留单行显示，若需换行可改为 normal */
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin: 0; /* 统一边距 */
+  margin: 0;
 }
 
 .image-metadata {
@@ -497,7 +503,6 @@ export default {
   margin-top: 5px;
 }
 
-/* 调整 .more-info-btn 样式以突出显示 */
 .more-info-btn {
   padding: 5px 10px;
   background-color: #007bff;
@@ -506,14 +511,12 @@ export default {
   border-radius: 5px;
   cursor: pointer;
   margin-top: 10px;
-  transition: background-color 0.2s; /* 添加平滑过渡效果 */
+  transition: background-color 0.2s;
 }
 
-/* 按钮悬停效果 */
 .more-info-btn:hover {
   background-color: #0056b3;
 }
-
 
 .nav-arrow {
   position: absolute;
@@ -562,6 +565,13 @@ export default {
   margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+.empty-text-message {
+  margin: 0;
+  font-size: 16px;
+  color: #666;
+  text-align: center;
 }
 
 .load-more {

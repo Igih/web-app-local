@@ -211,6 +211,8 @@ async def get_file_content(
         file_size = os.path.getsize(full_path)
         if file_size > 1_048_576:
             raise HTTPException(status_code=400, detail="File size exceeds 1MB limit")
+        elif file_size == 0:
+            return {"content": "", "detail": "File is empty"}
 
         try:
             with open(full_path, 'r', encoding='utf-8') as file:
