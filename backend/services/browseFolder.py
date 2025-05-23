@@ -30,16 +30,18 @@ def sanitize_path(input_path: str) -> str:
 def get_image_metadata(full_path: str) -> tuple:
     try:
         file_size = os.path.getsize(full_path)
-        if file_size > 10_485_760:  # 10MB 限制
-            return ("Oversized", "Unknown")
+        modified_timestamp = int(os.path.getmtime(full_path) * 1000)  # Convert to milliseconds
+        if file_size > 10_485_760:  # 10MB limit
+            return ("Oversized", "Unknown", modified_timestamp)
         with Image.open(full_path) as img:
             width, height = img.size
         file_size_kb = file_size / 1024
         file_size_str = f"{file_size_kb:.2f} KB" if file_size_kb < 1024 else f"{file_size_kb / 1024:.2f} MB"
-        return (f"{width}x{height}", file_size_str)
+        return (f"{width}x{height}", file_size_str, modified_timestamp)
     except Exception as e:
         logger.warning(f"Failed to get metadata for {full_path}: {str(e)}")
-        return ("Corrupted", "Unknown")
+        modified_timestamp = int(os.path.getmtime(full_path) * 1000) if os.path.exists(full_path) else 0
+        return ("Corrupted", "Unknown", modified_timestamp)
 
 
 async def browse_folder(
@@ -54,7 +56,6 @@ async def browse_folder(
         full_path = sanitize_path(path)
         relative_path = os.path.relpath(full_path, BROWSE_DIR)
 
-        # Check item count incrementally to avoid loading all items
         item_count = 0
         max_items = 100000
         for item in os.scandir(full_path):
@@ -91,6 +92,7 @@ async def browse_folder(
             is_xml = False
             is_json = False
             modified_time = entry.stat().st_mtime
+            modified_timestamp = int(modified_time * 1000)  # 转换为毫秒
             is_corrupted = False
             is_oversized = False
 
@@ -102,7 +104,8 @@ async def browse_folder(
                     file_size = os.path.getsize(item_path)
                     if file_size > 10_485_760:  # 10MB 限制
                         is_oversized = True
-                    thumbnail = f"/browse_folders/{rel_item_path}"
+                    else:
+                        thumbnail = f"/browse_folders/{rel_item_path}?t={modified_timestamp}"  # 添加时间戳
                     image_count += 1
                 elif ext == '.txt':
                     is_text = True
@@ -123,11 +126,12 @@ async def browse_folder(
                 is_xml=is_xml,
                 is_json=is_json,
                 modified_time=modified_time,
+                modified_timestamp=modified_timestamp,  # 确保包含
                 is_corrupted=is_corrupted,
                 is_oversized=is_oversized
             ))
 
-        # Sorting
+        # 排序和过滤逻辑保持不变
         if sort_by == "modified_time":
             all_items.sort(key=lambda x: x.modified_time, reverse=(sort_order == "desc"))
         else:
@@ -164,7 +168,6 @@ async def browse_folder(
         logger.error(f"Error browsing folder: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
 async def get_image_info(
     path: str = Query(..., description="Relative path to the image file"),
     current_user: User = Depends(get_current_active_user)
@@ -177,18 +180,17 @@ async def get_image_info(
         if not os.path.isfile(full_path):
             raise HTTPException(status_code=404, detail="File not found")
 
-        resolution, file_size = get_image_metadata(full_path)
+        resolution, file_size, modified_timestamp = get_image_metadata(full_path)
         if resolution == "Oversized" or resolution == "Corrupted":
             raise HTTPException(status_code=400, detail="Image is oversized or corrupted")
 
-        return ImageInfo(resolution=resolution, file_size=file_size)
+        return ImageInfo(resolution=resolution, file_size=file_size, modified_timestamp=modified_timestamp)
     except HTTPException as e:
         raise e
     except Exception as e:
         logger.error(f"Error fetching image info: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
+    
 async def get_file_content(
     path: str = Query(..., description="Relative path to the text, XML, or JSON file"),
     current_user: User = Depends(get_current_active_user)
@@ -210,7 +212,8 @@ async def get_file_content(
         try:
             with open(full_path, 'r', encoding='utf-8') as file:
                 content = file.read()
-            return {"content": content}
+            modified_timestamp = int(os.path.getmtime(full_path) * 1000)
+            return {"content": content, "modified_timestamp": modified_timestamp}
         except UnicodeDecodeError:
             raise HTTPException(status_code=400, detail="File is corrupted or not a valid text, XML, or JSON file")
     except HTTPException as e:

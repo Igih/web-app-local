@@ -64,13 +64,13 @@
         <button class="nav-arrow right" @click="nextImage" :disabled="!hasNextImage">►</button>
       </div>
       <div v-if="selectedText || selectedXml || selectedJson" class="modal" @click="closeModal">
-      <div class="text-preview" @click.stop>
-        <pre v-if="selectedText && selectedText !== '文件内容为空'">{{ selectedText }}</pre>
-        <pre v-else-if="selectedXml && selectedXml !== '文件内容为空'">{{ selectedXml }}</pre>
-        <pre v-else-if="selectedJson && selectedJson !== '文件内容为空'">{{ selectedJson }}</pre>
-        <p v-else class="empty-text-message">文件内容为空</p>
+        <div class="text-preview" @click.stop>
+          <pre v-if="selectedText && selectedText !== '文件内容为空'">{{ selectedText }}</pre>
+          <pre v-else-if="selectedXml && selectedXml !== '文件内容为空'">{{ selectedXml }}</pre>
+          <pre v-else-if="selectedJson && selectedJson !== '文件内容为空'">{{ selectedJson }}</pre>
+          <p v-else class="empty-text-message">文件内容为空</p>
+        </div>
       </div>
-    </div>
     </div>
   </div>
 </template>
