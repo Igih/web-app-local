@@ -18,18 +18,24 @@
       <span>文件夹: {{ totalFolders }}</span>
       <span>图片: {{ totalImages }}</span>
       <span>文本: {{ totalTexts }}</span>
+      <button class="view-toggle-btn" @click="toggleViewMode">
+        {{ viewMode === 'grid' ? '切换到列表视图' : '切换到网格视图' }}
+      </button>
     </div>
 
     <div v-if="isLoading && items.length === 0" class="loading-message">
       正在加载～～
     </div>
-    <div v-else-if="items.length > 0" class="item-grid">
+    <div v-else-if="items.length > 0" :class="['item-container', viewMode === 'grid' ? 'item-grid' : 'item-list']">
       <div v-for="item in items" :key="item.path" class="item" @click="handleItemClick(item)">
         <img v-if="item.thumbnail && !item.is_oversized && !item.is_corrupted" :src="item.thumbnail" alt="Thumbnail" class="thumbnail" loading="lazy"/>
         <span v-else class="icon">{{ item.is_directory ? '📁' : item.is_text || item.is_xml || item.is_json ? '📝' : '📄' }}</span>
-        <p :title="item.name">{{ item.name }}</p>
-        <p v-if="item.is_corrupted" class="corrupted-message">文件损坏</p>
-        <p v-else-if="item.is_oversized" class="oversized-message">文件过大</p>
+        <div class="item-info">
+          <p class="item-name" :title="item.name">{{ item.name }}</p>
+          <p v-if="item.is_corrupted" class="corrupted-message">文件损坏</p>
+          <p v-else-if="item.is_oversized" class="oversized-message">文件过大</p>
+          
+        </div>
       </div>
     </div>
     <div v-else-if="totalItems > 100000" class="error-message">
@@ -38,7 +44,7 @@
     <div v-else class="empty-message">
       没有发现图片和文件~~
       <p>('.jpg', '.jpeg', '.png', '.bmp', '.webp', '.gif')</p>
-      <p>(txt、 xml、 json)</p>
+      <p>(txt、xml、json、yaml、yml、py、sh、bash、md、markdown)</p>
     </div>
 
     <div class="load-more" v-if="hasMore">
@@ -109,11 +115,16 @@ export default {
     const totalTexts = ref(0)
     const showImageInfo = ref(false)
     const showMoreInfoBtn = ref(true)
+    const viewMode = ref('grid') // 'grid' | 'list'
 
     const breadcrumb = computed(() => currentPath.value.split('/').filter(segment => segment))
     const imageItems = computed(() => items.value.filter(item => item.thumbnail))
     const hasPrevImage = computed(() => selectedImageIndex.value > 0)
     const hasNextImage = computed(() => selectedImageIndex.value < imageItems.value.length - 1)
+
+    const toggleViewMode = () => {
+      viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
+    }
 
     const observeImages = () => {
       const images = document.querySelectorAll('.thumbnail')
@@ -345,7 +356,9 @@ export default {
       totalTexts,
       fetchImageInfo,
       showImageInfo,
-      showMoreInfoBtn
+      showMoreInfoBtn,
+      viewMode,
+      toggleViewMode
     }
   }
 }
@@ -399,16 +412,96 @@ export default {
   margin-bottom: 20px;
   font-size: 14px;
   color: #333;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .file-counts span {
   margin-right: 20px;
 }
 
+.view-toggle-btn {
+  padding: 5px 12px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-left: auto;
+}
+
+.view-toggle-btn:hover {
+  background-color: #218838;
+}
+
 .item-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
+}
+
+.item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-list .item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  text-align: left;
+  padding: 8px 12px;
+  gap: 12px;
+}
+
+.item-list .thumbnail {
+  max-width: 48px;
+  max-height: 48px;
+  flex-shrink: 0;
+}
+
+.item-list .icon {
+  font-size: 32px;
+  flex-shrink: 0;
+  width: 48px;
+  text-align: center;
+}
+
+.item-list .item-info {
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
+}
+
+.item-list .item-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-all;
+  margin: 0;
+  font-size: 14px;
+}
+
+.item-list .item-type {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  color: #666;
+}
+
+.item-grid .item-info {
+  width: 100%;
+}
+
+.item-grid .item-name {
+  margin: 5px 0 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .loading-message, .empty-message, .error-message {
@@ -435,12 +528,9 @@ export default {
   overflow: hidden;
 }
 
-.item p {
-  margin: 5px 0 0 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+.item:hover {
+  background-color: #f5f5f5;
+  border-color: #bbb;
 }
 
 .thumbnail {

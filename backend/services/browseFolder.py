@@ -72,7 +72,12 @@ async def browse_folder(
                 )
 
         all_items = []
-        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.txt', '.xml', '.json'}
+        # 新增支持的文本类扩展名：yaml / yml / py / sh / bash / md / markdown
+        allowed_extensions = {
+            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp',
+            '.txt', '.xml', '.json',
+            '.yaml', '.yml', '.py', '.sh', '.bash', '.md', '.markdown'
+        }
         folder_count = 0
         image_count = 0
         text_count = 0
@@ -107,7 +112,7 @@ async def browse_folder(
                     else:
                         thumbnail = f"/browse_folders/{rel_item_path}?t={modified_timestamp}"  # 添加时间戳
                     image_count += 1
-                elif ext == '.txt':
+                elif ext in {'.txt', '.yaml', '.yml', '.py', '.sh', '.bash', '.md', '.markdown'}:
                     is_text = True
                     text_count += 1
                 elif ext == '.xml':
@@ -192,14 +197,15 @@ async def get_image_info(
         raise HTTPException(status_code=500, detail="Internal server error")
     
 async def get_file_content(
-    path: str = Query(..., description="Relative path to the text, XML, or JSON file"),
+    path: str = Query(..., description="Relative path to the text, XML, JSON, YAML, Python, Bash or Markdown file"),
     current_user: User = Depends(get_current_active_user)
 ):
     try:
         full_path = sanitize_path(path)
         ext = os.path.splitext(full_path)[1].lower()
-        if ext not in {'.txt', '.xml', '.json'}:
-            raise HTTPException(status_code=400, detail="Only .txt, .xml, and .json files are supported")
+        # 新增支持 yaml / yml / py / sh / bash / md / markdown
+        if ext not in {'.txt', '.xml', '.json', '.yaml', '.yml', '.py', '.sh', '.bash', '.md', '.markdown'}:
+            raise HTTPException(status_code=400, detail="Only .txt, .xml, .json, .yaml, .yml, .py, .sh, .bash, .md and .markdown files are supported")
         if not os.path.isfile(full_path):
             raise HTTPException(status_code=404, detail="File not found")
 
@@ -215,7 +221,7 @@ async def get_file_content(
             modified_timestamp = int(os.path.getmtime(full_path) * 1000)
             return {"content": content, "modified_timestamp": modified_timestamp}
         except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail="File is corrupted or not a valid text, XML, or JSON file")
+            raise HTTPException(status_code=400, detail="File is corrupted or not a valid text, XML, JSON, YAML, Python, Bash or Markdown file")
     except HTTPException as e:
         raise e
     except Exception as e:
