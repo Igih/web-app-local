@@ -1,7 +1,20 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from routers import auth, user, dataset, category, markdown, browseFolder
+from routers import (
+    auth,
+    user,
+    dataset,
+    category,
+    markdown,
+    browseFolder,
+    asset_categories,
+    asset_files,
+    asset_import,
+    asset_images,
+    asset_overview,
+    asset_tags,
+)
 from config import BASE_STORAGE_DIR, IMAGES_DIR, BROWSE_DIR
 import os
 from utils.db import init_db_pool
@@ -31,6 +44,12 @@ app.include_router(dataset.router, prefix="/api")
 app.include_router(category.router, prefix="/api")
 app.include_router(markdown.router, prefix="/api")
 app.include_router(browseFolder.router, prefix="/api")
+app.include_router(asset_categories.router, prefix="/api")
+app.include_router(asset_files.router, prefix="/api")
+app.include_router(asset_import.router, prefix="/api")
+app.include_router(asset_images.router, prefix="/api")
+app.include_router(asset_overview.router, prefix="/api")
+app.include_router(asset_tags.router, prefix="/api")
 
 # @app.get("/{full_path:path}")
 # async def serve_spa(full_path: str):

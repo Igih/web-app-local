@@ -7,6 +7,10 @@ import UserDatasetManager from '@/components/UserDatasetManager.vue'
 import UserDocument from '@/components/UserDocument.vue'
 import VideoPlayer  from '@/components/VideoPlayer.vue'
 import FolderBrowser from '@/components/FolderBrowser.vue'
+import AssetImport from '@/views/assets/AssetImport.vue'
+import AssetImageManager from '@/views/assets/AssetImageManager.vue'
+import AssetImportRecords from '@/views/assets/AssetImportRecords.vue'
+import AssetOverview from '@/views/assets/AssetOverview.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const routes = [
@@ -21,6 +25,10 @@ const routes = [
       { path: 'markdown-editor', name: 'UserDocument', component: UserDocument },
       { path: 'user-guide', name: 'UserGuide', component: VideoPlayer },
       { path: 'folder', name: 'FolderBrowser', component: FolderBrowser }, // 新增路由
+      { path: 'assets/import', name: 'AssetImport', component: AssetImport },
+      { path: 'assets/images', name: 'AssetImageManager', component: AssetImageManager },
+      { path: 'assets/records', name: 'AssetImportRecords', component: AssetImportRecords },
+      { path: 'assets/overview', name: 'AssetOverview', component: AssetOverview },
     ]
   }
 ]

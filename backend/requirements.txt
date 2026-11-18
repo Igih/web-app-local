@@ -4,6 +4,7 @@ psycopg2-binary
 pydantic
 python-jose
 passlib[bcrypt]
+bcrypt==4.0.1
 tenacity
 python-multipart
 aiofiles
@@ -12,3 +13,6 @@ apscheduler
 python-jose[cryptography]
 python-dotenv
 Pillow
+alembic
+pytest
+httpx

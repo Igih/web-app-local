@@ -75,6 +75,19 @@
           <img src="/icons/file-document-outline.svg" alt="File-document Icon" class="menu-icon" />
           <span>Browse Files</span>
         </el-menu-item>
+        <el-sub-menu
+          index="10"
+          v-if="authStore.currentUser && authStore.currentUser.role === 'admin'"
+        >
+          <template #title>
+            <img src="/icons/database-outline.svg" alt="Assets Icon" class="menu-icon" />
+            <span>图像资源管理</span>
+          </template>
+          <el-menu-item index="10-1" @click="goToAssetImages">图库管理</el-menu-item>
+          <el-menu-item index="10-2" @click="goToAssetRecords">导入记录</el-menu-item>
+          <el-menu-item index="10-3" @click="goToAssetOverview">统计概览</el-menu-item>
+          <el-menu-item index="10-4" @click="goToAssetImport">新建导入</el-menu-item>
+        </el-sub-menu>
         <el-menu-item 
           v-if="authStore.currentUser && authStore.currentUser.role === 'admin'" 
           index="6" 
@@ -337,6 +350,14 @@ const activeIndex = computed(() => {
     return '9'
   } else if (route.path === '/folder') {
     return '5'
+  } else if (route.path === '/assets/images') {
+    return '10-1'
+  } else if (route.path === '/assets/records') {
+    return '10-2'
+  } else if (route.path === '/assets/overview') {
+    return '10-3'
+  } else if (route.path === '/assets/import') {
+    return '10-4'
   } else if (route.path.startsWith('/dataset/')) {
     return '1'
   }
@@ -410,6 +431,22 @@ const goToUserGuide = () => {
 
 const goToFilePreview = () => {
   router.push('/folder')
+}
+
+const goToAssetImages = () => {
+  router.push('/assets/images')
+}
+
+const goToAssetRecords = () => {
+  router.push('/assets/records')
+}
+
+const goToAssetOverview = () => {
+  router.push('/assets/overview')
+}
+
+const goToAssetImport = () => {
+  router.push('/assets/import')
 }
 
 const showLoginDialog = () => {

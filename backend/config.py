@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,5 +27,21 @@ DESCRIPTION_DIR = os.path.join(BASE_STORAGE_DIR, "dataset_descriptions")
 IMAGES_DIR = os.path.join(BASE_STORAGE_DIR, "category_images")
 
 BROWSE_DIR = os.getenv("BROWSE_DIR", "/home/linux/Downloads")
+
+# Asset module directory configuration
+def _split_paths(raw_value: str) -> list[str]:
+    return [path.strip() for path in raw_value.split(",") if path.strip()]
+
+
+ASSET_ROOT = Path(os.getenv("ASSET_ROOT", "/srv/flower-assets"))
+ASSET_INGEST_ROOTS = _split_paths(
+    os.getenv("ASSET_INGEST_ROOTS", "/home/linux/Downloads")
+)
+ASSET_INCOMING_DIR = ASSET_ROOT / "incoming"
+ASSET_ORIGINALS_DIR = ASSET_ROOT / "originals"
+ASSET_THUMBNAILS_DIR = ASSET_ROOT / "thumbnails"
+ASSET_ANNOTATIONS_DIR = ASSET_ROOT / "annotations"
+ASSET_QUARANTINE_DIR = ASSET_ROOT / "quarantine"
+ASSET_MANIFESTS_DIR = ASSET_ROOT / "manifests"
 
 # print(os.getenv("DB_NAME"))
