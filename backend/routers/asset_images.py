@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, Query
 
-from models.asset_image import AssetImageBatchUpdate, AssetImageUpdate
+from models.asset_image import AssetImageBatchDelete, AssetImageBatchUpdate, AssetImageUpdate
 from models.user import User
 from services.asset_images import (
+    batch_delete_asset_images,
     batch_update_asset_images,
+    delete_asset_image,
     get_asset_image,
     list_asset_images,
     update_asset_image,
@@ -71,3 +73,19 @@ async def patch_images_batch(
     current_user: User = Depends(admin_required),
 ):
     return await batch_update_asset_images(payload, current_user)
+
+
+@router.delete("/{image_id}")
+async def delete_image(
+    image_id: int,
+    current_user: User = Depends(admin_required),
+):
+    return await delete_asset_image(image_id, current_user)
+
+
+@router.post("/batch-delete")
+async def delete_images_batch(
+    payload: AssetImageBatchDelete,
+    current_user: User = Depends(admin_required),
+):
+    return await batch_delete_asset_images(payload, current_user)

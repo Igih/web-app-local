@@ -4,14 +4,18 @@
       <template #header>
         <div class="page-header">
           <span>图像资源管理</span>
-          <div>
+          <div class="header-actions">
+            <el-radio-group v-model="viewMode" size="small" @change="onViewModeChange">
+              <el-radio-button label="grid">缩略图</el-radio-button>
+              <el-radio-button label="list">列表</el-radio-button>
+            </el-radio-group>
             <el-button @click="$router.push('/assets/import')">新建导入</el-button>
-            <el-button type="primary" @click="loadImages">刷新</el-button>
+            <el-button type="primary" :disabled="!hasSearched" :loading="loading" @click="loadImages">刷新</el-button>
           </div>
         </div>
       </template>
 
-      <el-form inline @submit.prevent="loadImages">
+      <el-form class="filter-form" inline @submit.prevent="submitSearch">
         <el-form-item label="类别">
           <el-select v-model="filters.category" clearable placeholder="全部">
             <el-option
@@ -37,7 +41,22 @@
           </el-select>
         </el-form-item>
         <el-form-item label="标签">
-          <el-input v-model="filters.tags" placeholder="逗号分隔" />
+          <el-select
+            class="filter-tags"
+            v-model="filters.tags"
+            multiple
+            filterable
+            clearable
+            :multiple-limit="5"
+            placeholder="请选择标签"
+          >
+            <el-option
+              v-for="tag in tagOptions"
+              :key="tag.id"
+              :label="tag.display_name"
+              :value="tag.normalized_name"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="标签模式">
           <el-radio-group v-model="filters.tag_mode">
@@ -64,49 +83,74 @@
         </el-form-item>
       </el-form>
 
-      <el-button
-        v-if="selectedRows.length"
-        type="warning"
-        @click="openBatchEdit"
-      >
-        批量修改
-      </el-button>
+      <div v-if="viewMode === 'list' && selectedRows.length" class="batch-actions">
+        <el-button type="warning" @click="openBatchEdit">
+          批量修改
+        </el-button>
+        <el-button type="danger" @click="openBatchDelete">
+          批量删除
+        </el-button>
+      </div>
 
-      <el-table v-loading="loading" :data="images" @selection-change="onSelectionChange">
-        <el-table-column type="selection" width="45" />
-        <el-table-column label="缩略图" width="90">
-          <template #default="{ row }">
-            <img
-              v-if="thumbnailUrls[row.id]"
-              :src="thumbnailUrls[row.id]"
-              class="thumb"
-              alt=""
-            />
-            <div v-else class="thumb thumb-placeholder"></div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="id" label="ID" width="70" />
-        <el-table-column prop="category_name" label="类别" width="100" />
-        <el-table-column label="一级类型" width="100">
-          <template #default="{ row }">{{ typeLabel(row.capture_type) }}</template>
-        </el-table-column>
-        <el-table-column label="二级类型" width="100">
-          <template #default="{ row }">{{ spectralLabel(row.spectral_type) }}</template>
-        </el-table-column>
-        <el-table-column label="尺寸" width="130">
-          <template #default="{ row }">{{ row.width }} x {{ row.height }}</template>
-        </el-table-column>
-        <el-table-column prop="file_format" label="格式" width="80" />
-        <el-table-column label="标签">
-          <template #default="{ row }">{{ (row.tags || []).join(', ') }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="170">
-          <template #default="{ row }">
-            <el-button size="small" @click="showDetail(row.id)">详情</el-button>
-            <el-button size="small" type="primary" @click="openEdit(row)">编辑</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template v-if="viewMode === 'list'">
+        <el-table v-loading="loading" :data="images" :empty-text="emptyDescription" @selection-change="onSelectionChange">
+          <el-table-column type="selection" width="45" />
+          <el-table-column label="缩略图" width="90">
+            <template #default="{ row }">
+              <img
+                v-if="thumbnailUrls[row.id]"
+                :src="thumbnailUrls[row.id]"
+                class="thumb"
+                alt=""
+              />
+              <div v-else class="thumb thumb-placeholder"></div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="id" label="ID" width="70" />
+          <el-table-column prop="category_name" label="类别" width="100" />
+          <el-table-column label="一级类型" width="100">
+            <template #default="{ row }">{{ typeLabel(row.capture_type) }}</template>
+          </el-table-column>
+          <el-table-column label="二级类型" width="100">
+            <template #default="{ row }">{{ spectralLabel(row.spectral_type) }}</template>
+          </el-table-column>
+          <el-table-column label="尺寸" width="130">
+            <template #default="{ row }">{{ row.width }} x {{ row.height }}</template>
+          </el-table-column>
+          <el-table-column prop="file_format" label="格式" width="80" />
+          <el-table-column label="标签">
+            <template #default="{ row }">{{ (row.tags || []).join(', ') }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="230">
+            <template #default="{ row }">
+              <el-button size="small" @click="showDetail(row.id)">详情</el-button>
+              <el-button size="small" type="primary" @click="openEdit(row)">编辑</el-button>
+              <el-button size="small" type="danger" @click="confirmDelete(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
+      <template v-else>
+        <div v-loading="loading" class="thumbnail-grid-panel">
+          <el-empty v-if="!loading && !images.length" :description="emptyDescription" />
+          <div v-else-if="images.length" class="thumbnail-grid">
+            <div
+              v-for="(row, index) in images"
+              :key="row.id"
+              class="thumbnail-card"
+              @click="openPreview(index)"
+            >
+              <img
+                v-if="thumbnailUrls[row.id]"
+                :src="thumbnailUrls[row.id]"
+                class="grid-thumb"
+                alt=""
+              />
+              <div v-else class="grid-thumb grid-thumb-placeholder"></div>
+            </div>
+          </div>
+        </div>
+      </template>
 
       <el-pagination
         v-model:current-page="pagination.page"
@@ -114,8 +158,8 @@
         :total="pagination.total"
         :page-sizes="[20, 50, 100]"
         layout="total, sizes, prev, pager, next"
-        @current-change="loadImages"
-        @size-change="loadImages"
+        @current-change="handlePageChange"
+        @size-change="handleSizeChange"
       />
     </el-card>
 
@@ -209,28 +253,68 @@
         <el-button type="warning" @click="saveBatch">应用</el-button>
       </template>
     </el-dialog>
+
+    <div v-if="previewVisible" class="asset-image-preview-modal" @click="closePreview">
+      <div class="asset-image-preview-content" @click.stop>
+        <button class="preview-close" @click="closePreview">×</button>
+        <button
+          class="preview-nav-arrow preview-nav-left"
+          :disabled="previewIndex <= 0"
+          @click.stop="movePreview(-1)"
+        >
+          ◀
+        </button>
+        <img
+          v-if="previewOriginalUrl"
+          :src="previewOriginalUrl"
+          class="preview-full-image"
+          alt=""
+        />
+        <div v-else class="preview-image-placeholder">图片加载中...</div>
+        <button
+          class="preview-nav-arrow preview-nav-right"
+          :disabled="previewIndex >= images.length - 1"
+          @click.stop="movePreview(1)"
+        >
+          ▶
+        </button>
+      </div>
+    </div>
   </el-container>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  batchDeleteAssetImages,
   batchUpdateAssetImages,
+  deleteAssetImage,
   getAssetCategories,
   getAssetImage,
+  getAssetImageOriginal,
   getAssetImageThumbnail,
+  getAssetTags,
   listAssetImages,
   updateAssetImage,
 } from '@/services/assetService'
 
 const categories = ref([])
+const tagOptions = ref([])
+const viewMode = ref('grid')
+const hasSearched = ref(false)
+const submittedFilters = ref(null)
 const images = ref([])
 const thumbnailUrls = reactive({})
+const originalUrls = reactive({})
 const loading = ref(false)
 const selectedRows = ref([])
 const detail = ref(null)
 const detailVisible = ref(false)
+const previewVisible = ref(false)
+const previewIndex = ref(-1)
+const previewOriginalUrl = ref('')
+const previewLoading = ref(false)
 const editVisible = ref(false)
 const editForm = ref(null)
 const batchVisible = ref(false)
@@ -246,7 +330,7 @@ const filters = reactive({
   category: '',
   capture_type: '',
   spectral_type: '',
-  tags: '',
+  tags: [],
   tag_mode: 'and',
   status: '',
   min_width: null,
@@ -259,14 +343,24 @@ const pagination = reactive({
   total: 0,
 })
 
+const emptyDescription = computed(() =>
+  hasSearched.value ? '未找到符合条件的图片' : '设置筛选条件后点击查询'
+)
+const currentPreviewImage = computed(() => images.value[previewIndex.value] || null)
+
 const typeLabel = (value) => ({ photo: '实拍', hand_drawn: '手绘' }[value] || '未指定')
 const spectralLabel = (value) => ({ visible: '可见光', infrared: '红外' }[value] || '未指定')
 
 const loadImages = async () => {
+  if (!submittedFilters.value) {
+    return
+  }
+
   loading.value = true
+  hasSearched.value = true
   try {
     const result = await listAssetImages({
-      ...filters,
+      ...submittedFilters.value,
       page: pagination.page,
       page_size: pagination.page_size,
     })
@@ -278,6 +372,24 @@ const loadImages = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const submitSearch = () => {
+  submittedFilters.value = {
+    ...filters,
+    tags: filters.tags.join(','),
+  }
+  pagination.page = 1
+  loadImages()
+}
+
+const handlePageChange = () => {
+  loadImages()
+}
+
+const handleSizeChange = () => {
+  pagination.page = 1
+  loadImages()
 }
 
 const loadThumbnails = () => {
@@ -293,6 +405,77 @@ const loadThumbnails = () => {
         console.warn(`加载图片 ${row.id} 缩略图失败`, error)
       })
   })
+}
+
+const onViewModeChange = () => {
+  selectedRows.value = []
+  previewVisible.value = false
+}
+
+const getOriginalUrl = async (imageId) => {
+  if (originalUrls[imageId]) {
+    return originalUrls[imageId]
+  }
+
+  const url = await getAssetImageOriginal(imageId)
+  originalUrls[imageId] = url
+  return url
+}
+
+const loadPreviewData = async () => {
+  const row = currentPreviewImage.value
+  if (!row) {
+    return
+  }
+
+  previewLoading.value = true
+  previewOriginalUrl.value = ''
+
+  try {
+    previewOriginalUrl.value = await getOriginalUrl(row.id)
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '加载原图失败')
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+const openPreview = (index) => {
+  previewIndex.value = index
+  previewVisible.value = true
+  loadPreviewData()
+}
+
+const movePreview = (delta) => {
+  const nextIndex = previewIndex.value + delta
+  if (nextIndex < 0 || nextIndex >= images.value.length) {
+    return
+  }
+
+  previewIndex.value = nextIndex
+  loadPreviewData()
+}
+
+const closePreview = () => {
+  previewVisible.value = false
+}
+
+const handlePreviewKeydown = (event) => {
+  if (!previewVisible.value) {
+    return
+  }
+
+  if (event.key === 'Escape') {
+    closePreview()
+    return
+  }
+
+  if (event.key === 'ArrowLeft') {
+    movePreview(-1)
+  }
+  if (event.key === 'ArrowRight') {
+    movePreview(1)
+  }
 }
 
 const showDetail = async (imageId) => {
@@ -341,6 +524,93 @@ const openBatchEdit = () => {
   batchVisible.value = true
 }
 
+const cleanupImageUrls = (imageIds) => {
+  imageIds.forEach((imageId) => {
+    if (thumbnailUrls[imageId]) {
+      URL.revokeObjectURL(thumbnailUrls[imageId])
+      delete thumbnailUrls[imageId]
+    }
+    if (originalUrls[imageId]) {
+      URL.revokeObjectURL(originalUrls[imageId])
+      delete originalUrls[imageId]
+    }
+  })
+}
+
+const reloadAfterDelete = (deletedCount) => {
+  if (deletedCount >= images.value.length && pagination.page > 1) {
+    pagination.page -= 1
+  }
+  loadImages()
+}
+
+const confirmDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除图片 ID ${row.id} 吗？原图和缩略图文件也会被删除。`,
+      '删除确认',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    ElMessage.error(error.response?.data?.detail || '取消失败')
+    return
+  }
+
+  try {
+    await deleteAssetImage(row.id)
+    ElMessage.success('删除成功')
+    selectedRows.value = selectedRows.value.filter((item) => item.id !== row.id)
+    cleanupImageUrls([row.id])
+    reloadAfterDelete(1)
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '删除失败')
+  }
+}
+
+const openBatchDelete = async () => {
+  const imageIds = selectedRows.value.map((row) => row.id)
+  if (!imageIds.length) {
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${imageIds.length} 张图片吗？原图和缩略图文件也会被删除。`,
+      '批量删除确认',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    ElMessage.error(error.response?.data?.detail || '取消失败')
+    return
+  }
+
+  try {
+    await batchDeleteAssetImages(imageIds)
+    ElMessage.success(`已删除 ${imageIds.length} 张图片`)
+    cleanupImageUrls(imageIds)
+    selectedRows.value = []
+    reloadAfterDelete(imageIds.length)
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '批量删除失败')
+  }
+}
+
 const saveBatch = async () => {
   try {
     const payload = {
@@ -359,12 +629,25 @@ const saveBatch = async () => {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', handlePreviewKeydown)
+
   try {
     categories.value = await getAssetCategories()
   } catch (error) {
     ElMessage.error('加载类别失败')
   }
-  loadImages()
+
+  try {
+    tagOptions.value = await getAssetTags()
+  } catch (error) {
+    ElMessage.error('加载标签失败')
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handlePreviewKeydown)
+  Object.values(thumbnailUrls).forEach((url) => URL.revokeObjectURL(url))
+  Object.values(originalUrls).forEach((url) => URL.revokeObjectURL(url))
 })
 </script>
 
@@ -379,6 +662,27 @@ onMounted(async () => {
   align-items: center;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.filter-form :deep(.el-select) {
+  width: 180px;
+}
+
+.filter-form :deep(.filter-tags) {
+  width: 220px;
+}
+
 .thumb {
   width: 64px;
   height: 64px;
@@ -388,5 +692,128 @@ onMounted(async () => {
 
 .thumb-placeholder {
   background: #f0f0f0;
+}
+
+.thumbnail-grid-panel {
+  min-height: 260px;
+}
+
+.thumbnail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.thumbnail-card {
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f5f7fa;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.thumbnail-card:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+  transform: translateY(-2px);
+}
+
+.grid-thumb {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.grid-thumb-placeholder {
+  background: #e5e7eb;
+}
+
+.asset-image-preview-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  overflow: auto;
+}
+
+.asset-image-preview-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  min-height: 160px;
+}
+
+.preview-full-image {
+  display: block;
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+}
+
+.preview-image-placeholder {
+  color: #fff;
+  font-size: 16px;
+}
+
+.preview-close {
+  position: fixed;
+  top: 18px;
+  right: 24px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.preview-close:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.preview-nav-arrow {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 46px;
+  height: 64px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.preview-nav-arrow:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.preview-nav-arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.preview-nav-left {
+  left: 22px;
+}
+
+.preview-nav-right {
+  right: 22px;
 }
 </style>

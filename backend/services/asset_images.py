@@ -1,11 +1,13 @@
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 from psycopg2.extras import RealDictCursor
 
-from models.asset_image import AssetImageBatchUpdate, AssetImageUpdate
+from config import ASSET_ORIGINALS_DIR, ASSET_THUMBNAILS_DIR
+from models.asset_image import AssetImageBatchDelete, AssetImageBatchUpdate, AssetImageUpdate
 from models.user import User
 from utils.db import db_connection, db_transaction
 
@@ -418,3 +420,122 @@ async def batch_update_asset_images(
     except Exception as exc:
         logger.error("Failed to batch update asset images: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to batch update asset images")
+
+
+def _delete_image_files(storage_key: str) -> list[str]:
+    errors: list[str] = []
+    original_path = ASSET_ORIGINALS_DIR / storage_key
+    thumbnail_path = ASSET_THUMBNAILS_DIR / Path(storage_key).with_suffix(".jpg")
+
+    for label, path in (
+        ("original", original_path),
+        ("thumbnail", thumbnail_path),
+    ):
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError as exc:
+            message = f"{label}: {path} -> {exc}"
+            logger.warning("Failed to delete asset image file: %s", message)
+            errors.append(message)
+
+    return errors
+
+
+def _delete_image_record(cur, image_id: int, current_user: User) -> dict:
+    cur.execute(
+        """
+        SELECT id, sha256, storage_key, category_id, capture_type, spectral_type,
+               width, height, file_format, byte_size, status
+        FROM asset.images
+        WHERE id = %s
+        """,
+        (image_id,),
+    )
+    image = cur.fetchone()
+    if not image:
+        raise HTTPException(status_code=404, detail=f"Image not found: {image_id}")
+
+    cur.execute("DELETE FROM asset.images WHERE id = %s", (image_id,))
+    cur.execute(
+        """
+        INSERT INTO asset.audit_logs (
+            user_id, action_type, entity_type, entity_id, before_data
+        )
+        VALUES (%s, 'delete', 'image', %s, %s::jsonb)
+        """,
+        (
+            current_user.id,
+            image_id,
+            json.dumps(image, ensure_ascii=False, default=str),
+        ),
+    )
+    return image
+
+
+async def delete_asset_image(image_id: int, current_user: User) -> dict:
+    try:
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                image = _delete_image_record(cur, image_id, current_user)
+
+        file_errors = _delete_image_files(image["storage_key"])
+        logger.info("Asset image %s deleted by %s", image_id, current_user.username)
+        return {
+            "message": "Image deleted successfully",
+            "deleted": 1,
+            "file_errors": file_errors,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to delete asset image %s: %s", image_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to delete asset image")
+
+
+async def batch_delete_asset_images(
+    payload: AssetImageBatchDelete,
+    current_user: User,
+) -> dict:
+    unique_ids = list(dict.fromkeys(payload.image_ids))
+    if not unique_ids:
+        raise HTTPException(status_code=400, detail="image_ids is required")
+
+    try:
+        with db_transaction() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id, sha256, storage_key, category_id, capture_type,
+                           spectral_type, width, height, file_format, byte_size, status
+                    FROM asset.images
+                    WHERE id = ANY(%s)
+                    """,
+                    (unique_ids,),
+                )
+                images = cur.fetchall()
+                existing_ids = {row["id"] for row in images}
+                missing_ids = [image_id for image_id in unique_ids if image_id not in existing_ids]
+                if missing_ids:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Image not found: {', '.join(map(str, missing_ids))}",
+                    )
+
+                for image_id in unique_ids:
+                    _delete_image_record(cur, image_id, current_user)
+
+        file_errors: list[str] = []
+        for image in images:
+            file_errors.extend(_delete_image_files(image["storage_key"]))
+
+        return {
+            "message": "Batch delete completed",
+            "deleted": len(unique_ids),
+            "file_errors": file_errors,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to batch delete asset images: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to batch delete asset images")

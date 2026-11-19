@@ -12,3 +12,7 @@ class AssetImageUpdate(BaseModel):
 
 class AssetImageBatchUpdate(AssetImageUpdate):
     image_ids: list[int]
+
+
+class AssetImageBatchDelete(BaseModel):
+    image_ids: list[int]
