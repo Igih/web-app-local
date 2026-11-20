@@ -4,7 +4,7 @@
       <template #header>
         <div class="page-header">
           <span>导入任务</span>
-          <el-button type="primary" @click="loadBatches">刷新</el-button>
+          <el-button type="primary" @click="loadBatches()">刷新</el-button>
         </div>
       </template>
       <el-table v-loading="loading" :data="batches">
@@ -17,6 +17,21 @@
         <el-table-column prop="import_imported" label="已导入" width="80" />
         <el-table-column prop="import_duplicate" label="重复" width="80" />
         <el-table-column prop="import_failed" label="失败" width="80" />
+        <el-table-column label="进度" width="220">
+          <template #default="{ row }">
+            <el-progress
+              :percentage="progressFor(row)"
+              :status="progressStatus(row)"
+              :stroke-width="14"
+            />
+            <div class="progress-meta">{{ progressText(row) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="导入速度" width="120">
+          <template #default="{ row }">
+            <span>{{ formatSpeed(row) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="230">
           <template #default="{ row }">
             <el-button size="small" @click="showItems(row)">条目</el-button>
@@ -30,7 +45,7 @@
         v-model:page-size="pagination.page_size"
         :total="pagination.total"
         layout="total, prev, pager, next"
-        @current-change="loadBatches"
+        @current-change="() => loadBatches()"
       />
     </el-card>
 
@@ -48,14 +63,14 @@
         v-model:page-size="itemsPagination.page_size"
         :total="itemsPagination.total"
         layout="total, prev, pager, next"
-        @current-change="showItems(currentBatch)"
+        @current-change="() => showItems(currentBatch)"
       />
     </el-dialog>
   </el-container>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 
@@ -69,8 +84,87 @@ const currentBatch = ref(null)
 const pagination = reactive({ page: 1, page_size: 20, total: 0 })
 const itemsPagination = reactive({ page: 1, page_size: 20, total: 0 })
 
-const loadBatches = async () => {
-  loading.value = true
+const isActiveBatch = (batch) => ['queued', 'importing'].includes(batch?.status)
+const hasActiveBatches = computed(() => batches.value.some(isActiveBatch))
+let pollTimer = null
+
+const progressTotal = (batch) =>
+  Number(
+    batch?.progress_total ||
+      batch?.item_total ||
+      batch?.import_total ||
+      batch?.scan_image_count ||
+      0,
+  )
+
+const progressProcessed = (batch) =>
+  Number(batch?.item_processed || batch?.import_imported || 0)
+
+const progressFor = (batch) => {
+  if (Number.isFinite(batch?.progress_percent)) {
+    return batch.progress_percent
+  }
+
+  const total = progressTotal(batch)
+  if (!total) {
+    return 0
+  }
+
+  return Math.min(100, Math.round((progressProcessed(batch) / total) * 100))
+}
+
+const progressStatus = (batch) => {
+  if (batch?.status === 'failed') return 'exception'
+  if (batch?.status === 'partial') return 'warning'
+  if (['completed', 'stopped'].includes(batch?.status)) return 'success'
+  return ''
+}
+
+const progressText = (batch) => {
+  switch (batch?.status) {
+    case 'queued':
+      return '等待处理'
+    case 'importing':
+      return `${progressProcessed(batch)} / ${progressTotal(batch)}`
+    case 'completed':
+      return '已完成'
+    case 'partial':
+      return `部分完成：${progressProcessed(batch)} / ${progressTotal(batch)}`
+    case 'failed':
+      return '导入失败'
+    case 'stopped':
+      return '已停止'
+    case 'awaiting_confirmation':
+      return '待确认'
+    default:
+      return batch?.status || '—'
+  }
+}
+
+const formatSpeed = (batch) => {
+  if (!['queued', 'importing'].includes(batch?.status)) {
+    return '—'
+  }
+
+  const speed = Number(batch?.speed_per_second)
+  if (Number.isFinite(speed) && speed > 0) {
+    return `${speed.toFixed(1)} 张/秒`
+  }
+
+  return '—'
+}
+
+const syncPolling = () => {
+  if (hasActiveBatches.value && pollTimer === null) {
+    pollTimer = setInterval(() => loadBatches(true), 2000)
+  } else if (!hasActiveBatches.value && pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+const loadBatches = async (silent = false) => {
+  if (!silent) loading.value = true
   try {
     const response = await axios.get('/api/assets/imports', {
       params: {
@@ -81,9 +175,12 @@ const loadBatches = async () => {
     batches.value = response.data.batches || []
     pagination.total = response.data.total || 0
   } catch (error) {
-    ElMessage.error('加载导入任务失败')
+    if (!silent) {
+      ElMessage.error('加载导入任务失败')
+    }
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
+    syncPolling()
   }
 }
 
@@ -128,6 +225,11 @@ const stopBatch = async (batch) => {
 }
 
 onMounted(loadBatches)
+onBeforeUnmount(() => {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+  }
+})
 </script>
 
 <style scoped>
@@ -139,5 +241,12 @@ onMounted(loadBatches)
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.progress-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1;
 }
 </style>

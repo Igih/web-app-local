@@ -21,7 +21,9 @@
           @input="filterMarkdowns"
         >
           <template #prefix>
-            <Icon icon="mdi:magnify" class="search-icon" />
+            <svg class="search-icon" aria-hidden="true">
+              <use href="/icons/mdi.svg#magnify"></use>
+            </svg>
           </template>
         </el-input>
       </el-col>
@@ -87,10 +89,16 @@
             </el-col>
             <el-col :span="12" class="toolbar-right">
               <el-button @click="saveMarkdown" :disabled="!isEdited">
-                <Icon icon="mdi:content-save" /> Save
+                <svg class="inline-icon" aria-hidden="true">
+                  <use href="/icons/mdi.svg#content-save"></use>
+                </svg>
+                Save
               </el-button>
               <el-button @click="exportMarkdown">
-                <Icon icon="mdi:export" /> Export
+                <svg class="inline-icon" aria-hidden="true">
+                  <use href="/icons/mdi.svg#export"></use>
+                </svg>
+                Export
               </el-button>
             </el-col>
           </el-row>
@@ -149,7 +157,6 @@
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { ElMessage, ElEmpty, ElDialog } from 'element-plus'
-import { Icon } from '@iconify/vue'
 import axios from 'axios'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -429,7 +436,16 @@ onBeforeUnmount(async () => {
 }
 
 .search-icon {
+  width: 16px;
+  height: 16px;
   margin: 0 5px;
+}
+
+.inline-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  vertical-align: -2px;
 }
 
 .markdown-list {

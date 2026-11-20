@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from psycopg2.extras import RealDictCursor
@@ -16,6 +17,47 @@ COMBINATIONS = (
     ("hand_drawn", "visible"),
     ("hand_drawn", "infrared"),
 )
+
+TERMINAL_IMPORT_STATUSES = {"completed", "partial", "failed", "stopped"}
+
+
+def _enrich_import_progress(batch: dict) -> dict:
+    status = batch.get("status")
+    item_total = int(batch.get("item_total") or 0)
+    item_processed = int(batch.get("item_processed") or 0)
+    fallback_total = (
+        int(batch.get("scan_image_count") or 0)
+        or int(batch.get("import_total") or 0)
+    )
+    total = item_total or fallback_total
+
+    if status in TERMINAL_IMPORT_STATUSES:
+        progress_percent = 100
+    elif total:
+        progress_percent = min(100, round(item_processed / total * 100))
+    else:
+        progress_percent = 0
+
+    speed_per_second = None
+    updated_at = batch.get("updated_at")
+    if status in {"queued", "importing"} and updated_at:
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        elapsed_seconds = max(
+            0.0,
+            (datetime.now(timezone.utc) - updated_at).total_seconds(),
+        )
+        if elapsed_seconds >= 1:
+            speed_per_second = round(item_processed / elapsed_seconds, 2)
+
+    return {
+        **batch,
+        "item_total": item_total,
+        "item_processed": item_processed,
+        "progress_total": total,
+        "progress_percent": progress_percent,
+        "speed_per_second": speed_per_second,
+    }
 
 
 async def get_asset_stats() -> dict:
@@ -115,18 +157,39 @@ async def list_asset_imports(page: int = 1, page_size: int = 20) -> dict:
                 total = cur.fetchone()["total"]
                 cur.execute(
                     """
-                    SELECT id, batch_name, image_path, annotation_path, category_name,
-                           capture_type, spectral_type, recursive, status,
-                           scan_total, scan_image_count, scan_issue_count,
-                           import_total, import_imported, import_duplicate, import_failed,
-                           created_at, updated_at
-                    FROM asset.import_batches
-                    ORDER BY id DESC
+                    SELECT b.id, b.batch_name, b.image_path, b.annotation_path,
+                           b.category_name, b.capture_type, b.spectral_type,
+                           b.recursive, b.status, b.scan_total,
+                           b.scan_image_count, b.scan_issue_count,
+                           b.import_total, b.import_imported,
+                           b.import_duplicate, b.import_failed,
+                           b.created_at, b.updated_at,
+                           COALESCE(item.item_total, 0)::INTEGER AS item_total,
+                           COALESCE(item.item_processed, 0)::INTEGER AS item_processed,
+                           COALESCE(item.item_imported, 0)::INTEGER AS item_imported,
+                           COALESCE(item.item_duplicate, 0)::INTEGER AS item_duplicate,
+                           COALESCE(item.item_failed, 0)::INTEGER AS item_failed
+                    FROM asset.import_batches b
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            COUNT(*) AS item_total,
+                            COUNT(*) FILTER (
+                                WHERE i.status IN (
+                                    'imported', 'duplicate', 'conflict', 'failed', 'skipped'
+                                )
+                            ) AS item_processed,
+                            COUNT(*) FILTER (WHERE i.status = 'imported') AS item_imported,
+                            COUNT(*) FILTER (WHERE i.status = 'duplicate') AS item_duplicate,
+                            COUNT(*) FILTER (WHERE i.status = 'failed') AS item_failed
+                        FROM asset.import_items i
+                        WHERE i.batch_id = b.id
+                    ) item ON TRUE
+                    ORDER BY b.id DESC
                     LIMIT %s OFFSET %s
                     """,
                     (page_size, offset),
                 )
-                batches = cur.fetchall()
+                batches = [_enrich_import_progress(batch) for batch in cur.fetchall()]
 
         return {"batches": batches, "total": total, "page": page, "page_size": page_size}
     except HTTPException:

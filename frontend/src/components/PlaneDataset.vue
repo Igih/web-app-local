@@ -10,30 +10,42 @@
       >
         <el-sub-menu index="1">
           <template #title>
-            <Icon icon="mdi:database" class="menu-icon" />
+            <svg class="menu-icon" aria-hidden="true">
+              <use href="/icons/mdi.svg#database"></use>
+            </svg>
             <span>Datasets</span>
           </template>
           <el-menu-item index="1-1" @click="goToPlaneDataset">
-            <Icon icon="mdi:airplane" class="menu-icon" />
+            <svg class="menu-icon" aria-hidden="true">
+              <use href="/icons/mdi.svg#airplane"></use>
+            </svg>
             <span>Plane</span>
           </el-menu-item>
           <el-menu-item index="1-2">
-            <Icon icon="mdi:car" class="menu-icon" />
+            <svg class="menu-icon" aria-hidden="true">
+              <use href="/icons/mdi.svg#car"></use>
+            </svg>
             <span>Car</span>
           </el-menu-item>
           <el-menu-item index="1-3">
-            <Icon icon="mdi:ferry" class="menu-icon" />
+            <svg class="menu-icon" aria-hidden="true">
+              <use href="/icons/mdi.svg#ferry"></use>
+            </svg>
             <span>Ship</span>
           </el-menu-item>
           <el-menu-item index="1-4">
-            <Icon icon="mdi:tank" class="menu-icon" />
+            <svg class="menu-icon" aria-hidden="true">
+              <use href="/icons/mdi.svg#tank"></use>
+            </svg>
             <span>Tank</span>
           </el-menu-item>
         </el-sub-menu>
         <el-tooltip content="Innovative solutions for computer vision challenges." placement="bottom">
           <el-sub-menu index="2">
             <template #title>
-              <Icon icon="mdi:lightbulb" class="menu-icon" />
+              <svg class="menu-icon" aria-hidden="true">
+                <use href="/icons/mdi.svg#lightbulb"></use>
+              </svg>
               <span>Solutions</span>
             </template>
             <el-menu-item index="2-1">Solution 1</el-menu-item>
@@ -43,34 +55,46 @@
         <el-tooltip content="Resources for learning and development." placement="bottom">
           <el-sub-menu index="3">
             <template #title>
-              <Icon icon="mdi:book-open" class="menu-icon" />
+              <svg class="menu-icon" aria-hidden="true">
+                <use href="/icons/mdi.svg#book-open"></use>
+              </svg>
               <span>Resource</span>
             </template>
             <el-menu-item index="3-1">
-              <Icon icon="mdi:drone" class="menu-icon" />
+              <svg class="menu-icon" aria-hidden="true">
+                <use href="/icons/mdi.svg#drone"></use>
+              </svg>
               <span>Drone</span>
             </el-menu-item>
             <el-menu-item index="3-2">
-              <Icon icon="mdi:map" class="menu-icon" />
+              <svg class="menu-icon" aria-hidden="true">
+                <use href="/icons/mdi.svg#map"></use>
+              </svg>
               <span>Altlas</span>
             </el-menu-item>
           </el-sub-menu>
         </el-tooltip>
         <el-tooltip content="Explore our pricing plans for all budgets." placement="bottom">
           <el-menu-item index="4">
-            <Icon icon="mdi:tag" class="menu-icon" />
+            <svg class="menu-icon" aria-hidden="true">
+              <use href="/icons/mdi.svg#tag"></use>
+            </svg>
             <span>Pricing</span>
           </el-menu-item>
         </el-tooltip>
         <el-tooltip content="Access detailed documentation for developers." placement="bottom">
           <el-menu-item index="5">
-            <Icon icon="mdi:document" class="menu-icon" />
+            <svg class="menu-icon" aria-hidden="true">
+              <use href="/icons/mdi.svg#document"></use>
+            </svg>
             <span>Docs</span>
           </el-menu-item>
         </el-tooltip>
         <el-tooltip content="Read the latest updates and insights on our blog." placement="bottom">
           <el-menu-item index="6">
-            <Icon icon="mdi:newspaper" class="menu-icon" />
+            <svg class="menu-icon" aria-hidden="true">
+              <use href="/icons/mdi.svg#newspaper"></use>
+            </svg>
             <span>Blog</span>
           </el-menu-item>
         </el-tooltip>
@@ -133,7 +157,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Icon } from '@iconify/vue'
 import axios from 'axios'
 
 const router = useRouter()

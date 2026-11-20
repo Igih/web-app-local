@@ -83,9 +83,9 @@
             <img src="/icons/database-outline.svg" alt="Assets Icon" class="menu-icon" />
             <span>图像资源管理</span>
           </template>
+          <el-menu-item index="10-3" @click="goToAssetOverview">统计概览</el-menu-item>
           <el-menu-item index="10-1" @click="goToAssetImages">图库管理</el-menu-item>
           <el-menu-item index="10-2" @click="goToAssetRecords">导入记录</el-menu-item>
-          <el-menu-item index="10-3" @click="goToAssetOverview">统计概览</el-menu-item>
           <el-menu-item index="10-4" @click="goToAssetImport">新建导入</el-menu-item>
         </el-sub-menu>
         <el-menu-item 

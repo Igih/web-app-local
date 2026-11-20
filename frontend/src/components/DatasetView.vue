@@ -2,7 +2,9 @@
   <div class="plane-dataset-container">
     <div class="dataset-section">
       <h1>
-        <Icon :icon="categoryIcon" class="category-icon" />
+        <svg class="category-icon" aria-hidden="true">
+          <use :href="`/icons/mdi.svg#${categoryIcon}`"></use>
+        </svg>
         {{ formattedCategory }} Datasets
       </h1>
       <p v-if="categoryDescription">{{ categoryDescription }}</p>
@@ -147,7 +149,6 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { Icon } from '@iconify/vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import fallbackImage from '@/assets/00214.jpg'
@@ -351,13 +352,13 @@ const searchDatasets = () => {
 
 const getCategoryIcon = (category) => {
   const iconMap = {
-    plane: 'mdi:airplane',
-    car: 'mdi:car',
-    ship: 'mdi:ferry',
-    tank: 'mdi:tank',
-    drone: 'mdi:drone',
+    plane: 'airplane',
+    car: 'car',
+    ship: 'ferry',
+    tank: 'tank',
+    drone: 'drone',
   }
-  return iconMap[category.toLowerCase()] || 'mdi:database'
+  return iconMap[category.toLowerCase()] || 'database'
 }
 
 const formatSize = (bytes) => {
@@ -445,6 +446,13 @@ onUnmounted(() => {
   opacity: 1;
   white-space: normal;
   word-break: normal;
+}
+
+.category-icon {
+  width: 42px;
+  height: 42px;
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
 .dataset-section p {
