@@ -120,9 +120,9 @@
     <div class="sample-images">
       <h2>Sample Images</h2>
       <div class="image-grid">
-        <img src="https://via.placeholder.com/300x200?text=Plane+1" alt="Plane 1" />
-        <img src="https://via.placeholder.com/300x200?text=Plane+2" alt="Plane 2" />
-        <img src="https://via.placeholder.com/300x200?text=Plane+3" alt="Plane 3" />
+        <img src="/icons/plane-sample-1.svg" alt="Plane 1" />
+        <img src="/icons/plane-sample-2.svg" alt="Plane 2" />
+        <img src="/icons/plane-sample-3.svg" alt="Plane 3" />
       </div>
     </div>
 

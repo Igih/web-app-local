@@ -292,7 +292,7 @@ onBeforeUnmount(() => {
   display: block;
   margin-top: 4px;
   color: #94a3b8;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
 }
 
@@ -332,7 +332,7 @@ onBeforeUnmount(() => {
 
 .slider-value {
   color: #2563eb;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   text-align: right;
 }
 </style>

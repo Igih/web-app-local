@@ -145,18 +145,74 @@ async def get_asset_stats() -> dict:
         raise HTTPException(status_code=500, detail="Failed to get asset stats")
 
 
-async def list_asset_imports(page: int = 1, page_size: int = 20) -> dict:
+def _build_import_filters(
+    status: str | None,
+    category_name: str | None,
+    search: str | None,
+) -> tuple[list[str], list[object]]:
+    clauses: list[str] = []
+    params: list[object] = []
+
+    if status:
+        status_values = [value.strip() for value in status.split(",") if value.strip()]
+        if status_values:
+            placeholders = ", ".join(["%s"] * len(status_values))
+            clauses.append(f"b.status IN ({placeholders})")
+            params.extend(status_values)
+
+    if category_name:
+        clauses.append("b.category_name = %s")
+        params.append(category_name)
+
+    if search:
+        pattern = f"%{search.strip()}%"
+        clauses.append(
+            """
+            (
+                b.batch_name ILIKE %s
+                OR CAST(b.id AS TEXT) ILIKE %s
+                OR b.image_path ILIKE %s
+            )
+            """
+        )
+        params.extend([pattern, pattern, pattern])
+
+    return clauses, params
+
+
+async def list_asset_imports(
+    page: int = 1,
+    page_size: int = 20,
+    status: str | None = None,
+    category_name: str | None = None,
+    search: str | None = None,
+) -> dict:
     if page < 1 or page_size < 1 or page_size > 100:
         raise HTTPException(status_code=400, detail="Invalid pagination")
     offset = (page - 1) * page_size
+    filter_clauses, filter_params = _build_import_filters(
+        status, category_name, search
+    )
+    summary_clauses, summary_params = _build_import_filters(
+        None, category_name, search
+    )
+    filter_sql = ""
+    summary_sql = ""
+    if filter_clauses:
+        filter_sql = " WHERE " + " AND ".join(filter_clauses)
+    if summary_clauses:
+        summary_sql = " WHERE " + " AND ".join(summary_clauses)
 
     try:
         with db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("SELECT COUNT(*) AS total FROM asset.import_batches")
+                cur.execute(
+                    f"SELECT COUNT(*) AS total FROM asset.import_batches b{filter_sql}",
+                    filter_params,
+                )
                 total = cur.fetchone()["total"]
                 cur.execute(
-                    """
+                    f"""
                     SELECT b.id, b.batch_name, b.image_path, b.annotation_path,
                            b.category_name, b.capture_type, b.spectral_type,
                            b.recursive, b.status, b.scan_total,
@@ -184,14 +240,35 @@ async def list_asset_imports(page: int = 1, page_size: int = 20) -> dict:
                         FROM asset.import_items i
                         WHERE i.batch_id = b.id
                     ) item ON TRUE
+                    {filter_sql}
                     ORDER BY b.id DESC
                     LIMIT %s OFFSET %s
                     """,
-                    (page_size, offset),
+                    (*filter_params, page_size, offset),
                 )
                 batches = [_enrich_import_progress(batch) for batch in cur.fetchall()]
+                cur.execute(
+                    f"""
+                    SELECT b.status, COUNT(*) AS count
+                    FROM asset.import_batches b
+                    {summary_sql}
+                    GROUP BY b.status
+                    """,
+                    summary_params,
+                )
+                summary = {
+                    row["status"]: row["count"]
+                    for row in cur.fetchall()
+                }
 
-        return {"batches": batches, "total": total, "page": page, "page_size": page_size}
+        return {
+            "batches": batches,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "summary": summary,
+            "summary_total": sum(summary.values()),
+        }
     except HTTPException:
         raise
     except Exception as exc:

@@ -47,10 +47,6 @@
             <span>Atlas</span>
           </el-menu-item>
         </el-sub-menu>
-        <el-menu-item index="9" @click="goToUserGuide">
-          <img src="/icons/youtube.svg" alt="Video Icon" class="menu-icon" />
-          <span>User Guide</span>
-        </el-menu-item>
         <el-menu-item 
           index="7" 
           @click="goToUserDatasetManager"
@@ -346,8 +342,6 @@ const activeIndex = computed(() => {
     return '7'
   } else if (route.path === '/markdown-editor') {
     return '8'
-  } else if (route.path === '/user-guide') {
-    return '9'
   } else if (route.path === '/folder') {
     return '5'
   } else if (route.path === '/assets/images') {
@@ -423,10 +417,6 @@ const goToUserDatasetManager = () => {
 
 const goToHome = () => {
   router.push('/')
-}
-
-const goToUserGuide = () => {
-  router.push('/user-guide')
 }
 
 const goToFilePreview = () => {

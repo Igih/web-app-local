@@ -5,7 +5,6 @@ import DatasetManager from '@/components/DatasetManager.vue'
 import DatasetView from '@/components/DatasetView.vue'
 import UserDatasetManager from '@/components/UserDatasetManager.vue'
 import UserDocument from '@/components/UserDocument.vue'
-import VideoPlayer  from '@/components/VideoPlayer.vue'
 import FolderBrowser from '@/components/FolderBrowser.vue'
 import AssetImport from '@/views/assets/AssetImport.vue'
 import AssetImageManager from '@/views/assets/AssetImageManager.vue'
@@ -24,7 +23,6 @@ const routes = [
       { path: 'dataset/:category', name: 'DatasetView', component: DatasetView, props: true },
       { path: 'user-dataset-manager', name: 'UserDatasetManager', component: UserDatasetManager },
       { path: 'markdown-editor', name: 'UserDocument', component: UserDocument },
-      { path: 'user-guide', name: 'UserGuide', component: VideoPlayer },
       { path: 'folder', name: 'FolderBrowser', component: FolderBrowser }, // 新增路由
       { path: 'assets/import', name: 'AssetImport', component: AssetImport },
       { path: 'assets/images', name: 'AssetImageManager', component: AssetImageManager },

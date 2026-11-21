@@ -17,11 +17,11 @@
     <template v-else>
       <header class="page-hero">
         <div class="hero-copy">
-          <div class="eyebrow">
+          <!-- <div class="eyebrow">
             <span class="pulse-dot"></span>
             ASSET://OVERVIEW
             <span class="eyebrow-muted">· 自动校验节点运行中</span>
-          </div>
+          </div> -->
           <h1>图像资源统计与多维分析</h1>
           <p>汇总唯一图像、来源文件与重复/损坏/冲突状态，并拆解采集方式、光谱类型和类别分布。</p>
         </div>
@@ -672,7 +672,7 @@ onMounted(loadStats)
     radial-gradient(circle at 90% 0%, rgba(8, 145, 178, 0.08), transparent 26%),
     var(--surface);
   color: var(--text);
-  font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   text-align: left;
 }
 
@@ -727,7 +727,7 @@ onMounted(loadStats)
   gap: 8px;
   margin-bottom: 8px;
   color: var(--tertiary);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
   letter-spacing: 0.02em;
 }
@@ -886,7 +886,7 @@ onMounted(loadStats)
 .kpi-value {
   margin-top: 16px;
   color: var(--accent, var(--text));
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 25px;
   font-weight: 600;
   line-height: 1;
@@ -942,7 +942,7 @@ onMounted(loadStats)
   border-radius: 999px;
   background: #eff6ff;
   color: var(--primary);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
   white-space: nowrap;
 }
@@ -1005,7 +1005,7 @@ onMounted(loadStats)
 .bar-value {
   min-height: 16px;
   color: var(--text-soft);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
   white-space: nowrap;
 }
@@ -1042,7 +1042,7 @@ onMounted(loadStats)
 .bar-percent {
   margin-top: 3px;
   color: var(--muted);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 10px;
 }
 
@@ -1064,7 +1064,7 @@ onMounted(loadStats)
 
 .donut-heading span:last-child {
   color: var(--tertiary);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
 }
 
@@ -1094,7 +1094,7 @@ onMounted(loadStats)
 
 .donut-center strong {
   color: var(--text);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 22px;
   font-weight: 600;
 }
@@ -1139,7 +1139,7 @@ onMounted(loadStats)
 
 .legend-row strong {
   color: var(--text-soft);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 10px;
 }
 
@@ -1174,7 +1174,7 @@ onMounted(loadStats)
 
 .gauge-center strong {
   color: var(--text);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 24px;
   font-weight: 600;
 }
@@ -1213,7 +1213,7 @@ onMounted(loadStats)
 
 .health-row strong {
   color: var(--text);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
 }
 
@@ -1285,13 +1285,13 @@ onMounted(loadStats)
   display: block;
   margin-top: 3px;
   color: var(--muted);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 10px;
 }
 
 .category-card-head strong {
   color: var(--primary);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 16px;
 }
 
@@ -1314,7 +1314,7 @@ onMounted(loadStats)
 .mini-value {
   min-height: 15px;
   color: var(--text-soft);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 10px;
   white-space: nowrap;
 }
@@ -1358,7 +1358,7 @@ onMounted(loadStats)
 
 .category-card-foot strong {
   color: var(--tertiary);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
 }
 
@@ -1463,7 +1463,7 @@ tbody tr:hover {
 
 .num {
   text-align: right;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .category-cell {
@@ -1497,7 +1497,7 @@ tbody tr:hover {
   display: block;
   margin-top: 3px;
   color: var(--muted);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 10px;
 }
 
@@ -1565,7 +1565,7 @@ tbody tr:hover {
 .share-cell span {
   min-width: 42px;
   color: var(--muted);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 10px;
   text-align: right;
 }
@@ -1589,7 +1589,7 @@ tbody tr:hover {
 
 .table-summary strong {
   color: var(--text);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .summary-divider {
@@ -1606,7 +1606,7 @@ tbody tr:hover {
   align-items: center;
   gap: 7px;
   color: var(--tertiary);
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
 }
 

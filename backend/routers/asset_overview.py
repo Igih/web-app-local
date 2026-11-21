@@ -24,9 +24,18 @@ async def stats(current_user: User = Depends(get_current_active_user)):
 async def imports(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    status: str | None = Query(None),
+    category_name: str | None = Query(None),
+    search: str | None = Query(None),
     current_user: User = Depends(get_current_active_user),
 ):
-    return await list_asset_imports(page, page_size)
+    return await list_asset_imports(
+        page=page,
+        page_size=page_size,
+        status=status,
+        category_name=category_name,
+        search=search,
+    )
 
 
 @router.get("/imports/{batch_id}")
