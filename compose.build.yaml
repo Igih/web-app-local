@@ -1,0 +1,24 @@
+services:
+  frontend:
+    image: web-app-xd-frontend:1.0
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+  backend:
+    image: web-app-xd-backend:1.0
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+  asset-worker:
+    image: web-app-xd-asset-worker:1.0
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+  quality-worker:
+    image: web-app-xd-quality-worker:1.0
+    build:
+      context: ./backend
+      dockerfile: Dockerfile

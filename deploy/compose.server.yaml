@@ -1,0 +1,137 @@
+services:
+  db:
+    image: postgres:15
+    container_name: web-app-xd-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-myzpp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-my123}
+      POSTGRES_DB: ${POSTGRES_DB:-mydb}
+      POSTGRES_MAX_CONNECTIONS: ${POSTGRES_MAX_CONNECTIONS:-50}
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-1GB}
+      POSTGRES_WORK_MEM: ${POSTGRES_WORK_MEM:-16MB}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-myzpp}", "-d", "${POSTGRES_DB:-mydb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./data/postgresql:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: "${DB_CPUS:-4.0}"
+          memory: ${DB_MEMORY:-4G}
+    restart: unless-stopped
+    networks:
+      - webxd
+
+  frontend:
+    image: web-app-xd-frontend:1.0
+    container_name: web-app-xd-frontend
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - backend
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/myset.conf:ro
+      - ./browse:/home/linux/Downloads:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "${FRONTEND_CPUS:-2.0}"
+          memory: ${FRONTEND_MEMORY:-1G}
+    restart: unless-stopped
+    networks:
+      - webxd
+
+  backend:
+    image: web-app-xd-backend:1.0
+    container_name: web-app-xd-backend
+    ports:
+      - "${API_PORT:-8002}:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-change-me-to-a-long-random-secret}
+      DB_NAME: ${POSTGRES_DB:-mydb}
+      DB_USER: ${POSTGRES_USER:-myzpp}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-my123}
+      DB_HOST: db
+      DB_PORT: 5432
+      STORAGE_DIR: /home/linux/datasets
+      BROWSE_DIR: /home/linux/Downloads
+      ASSET_ROOT: /srv/flower-assets
+      ASSET_INGEST_ROOTS: /home/linux/Downloads
+    volumes:
+      - ./data/datasets:/home/linux/datasets
+      - ./flower-assets:/srv/flower-assets:rw
+      - ./browse:/home/linux/Downloads:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "${BACKEND_CPUS:-8.0}"
+          memory: ${BACKEND_MEMORY:-10G}
+    restart: unless-stopped
+    networks:
+      - webxd
+
+  asset-worker:
+    image: web-app-xd-asset-worker:1.0
+    container_name: web-app-xd-asset-worker
+    command: ["python", "asset_worker.py"]
+    environment:
+      DB_NAME: ${POSTGRES_DB:-mydb}
+      DB_USER: ${POSTGRES_USER:-myzpp}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-my123}
+      DB_HOST: db
+      DB_PORT: 5432
+      ASSET_ROOT: /srv/flower-assets
+      ASSET_INGEST_ROOTS: /home/linux/Downloads
+      ASSET_WORKER_POLL_INTERVAL: ${ASSET_WORKER_POLL_INTERVAL:-5}
+    volumes:
+      - ./flower-assets:/srv/flower-assets
+      - ./browse:/home/linux/Downloads:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "${ASSET_WORKER_CPUS:-2.0}"
+          memory: ${ASSET_WORKER_MEMORY:-1G}
+    restart: unless-stopped
+    networks:
+      - webxd
+
+  quality-worker:
+    image: web-app-xd-quality-worker:1.0
+    container_name: web-app-xd-quality-worker
+    command: ["python", "quality_worker.py"]
+    environment:
+      DB_NAME: ${POSTGRES_DB:-mydb}
+      DB_USER: ${POSTGRES_USER:-myzpp}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-my123}
+      DB_HOST: db
+      DB_PORT: 5432
+      ASSET_ROOT: /srv/flower-assets
+      ASSET_INGEST_ROOTS: /home/linux/Downloads
+      QUALITY_WORKER_POLL_INTERVAL: ${QUALITY_WORKER_POLL_INTERVAL:-5}
+    volumes:
+      - ./flower-assets:/srv/flower-assets:rw
+      - ./browse:/home/linux/Downloads:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "${QUALITY_WORKER_CPUS:-4.0}"
+          memory: ${QUALITY_WORKER_MEMORY:-4G}
+    restart: unless-stopped
+    networks:
+      - webxd
+
+networks:
+  webxd:
+    name: web-app-xd-network
