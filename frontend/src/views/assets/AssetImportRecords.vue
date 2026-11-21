@@ -34,6 +34,9 @@
         </el-table-column>
         <el-table-column label="操作" width="230">
           <template #default="{ row }">
+            <el-button size="small" type="primary" @click="openQuality(row)">
+              体检
+            </el-button>
             <el-button size="small" @click="showItems(row)">条目</el-button>
             <el-button size="small" type="warning" @click="retryBatch(row)">重试</el-button>
             <el-button size="small" type="danger" @click="stopBatch(row)">停止</el-button>
@@ -73,6 +76,9 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const batches = ref([])
 const loading = ref(false)
@@ -222,6 +228,10 @@ const stopBatch = async (batch) => {
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '停止失败')
   }
+}
+
+const openQuality = (batch) => {
+  router.push(`/assets/quality/${batch.id}`)
 }
 
 onMounted(loadBatches)

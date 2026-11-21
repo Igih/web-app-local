@@ -100,5 +100,32 @@ services:
           memory: 1G
     restart: unless-stopped
 
+  quality-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["python", "quality_worker.py"]
+    environment:
+      - DB_NAME=mydb
+      - DB_USER=myzpp
+      - DB_PASSWORD=my123
+      - DB_HOST=db
+      - DB_PORT=5432
+      - ASSET_ROOT=/srv/flower-assets
+      - ASSET_INGEST_ROOTS=/home/linux/Downloads
+      - QUALITY_WORKER_POLL_INTERVAL=5
+    volumes:
+      - /srv/flower-assets:/srv/flower-assets:rw
+      - /home/linux/Downloads:/home/linux/Downloads:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+    restart: unless-stopped
+
 # volumes:
 #   pgdata:

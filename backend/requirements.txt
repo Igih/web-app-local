@@ -16,3 +16,8 @@ Pillow
 alembic
 pytest
 httpx
+numpy>=1.26
+opencv-python-headless>=4.10
+scikit-image>=0.24
+imagehash>=4.3
+tifffile>=2024.8

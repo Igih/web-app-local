@@ -44,4 +44,16 @@ ASSET_ANNOTATIONS_DIR = ASSET_ROOT / "annotations"
 ASSET_QUARANTINE_DIR = ASSET_ROOT / "quarantine"
 ASSET_MANIFESTS_DIR = ASSET_ROOT / "manifests"
 
+# Asset quality precheck directories.
+ASSET_QUALITY_DIR = ASSET_ROOT / "quality"
+ASSET_QUALITY_PREVIEWS_DIR = ASSET_QUALITY_DIR / "previews"
+ASSET_QUALITY_EXPORTS_DIR = ASSET_QUALITY_DIR / "exports"
+
+# Quality analysis constants. Keep these explicit so results are reproducible.
+QUALITY_PREPROCESS_VERSION = "preprocess_v1"
+QUALITY_ALGORITHM_VERSION = "q1_metrics_v1"
+QUALITY_ANALYSIS_LONG_SIDE = 1024
+QUALITY_PHASH_VERSION = "phash_64_v1"
+QUALITY_PHASH_SEARCH_RADIUS = 10
+
 # print(os.getenv("DB_NAME"))

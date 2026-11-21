@@ -11,6 +11,7 @@ import AssetImport from '@/views/assets/AssetImport.vue'
 import AssetImageManager from '@/views/assets/AssetImageManager.vue'
 import AssetImportRecords from '@/views/assets/AssetImportRecords.vue'
 import AssetOverview from '@/views/assets/AssetOverview.vue'
+import AssetQualityDashboard from '@/views/assets/AssetQualityDashboard.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const routes = [
@@ -29,6 +30,12 @@ const routes = [
       { path: 'assets/images', name: 'AssetImageManager', component: AssetImageManager },
       { path: 'assets/records', name: 'AssetImportRecords', component: AssetImportRecords },
       { path: 'assets/overview', name: 'AssetOverview', component: AssetOverview },
+      {
+        path: 'assets/quality/:batchId',
+        name: 'AssetQualityDashboard',
+        component: AssetQualityDashboard,
+        props: true,
+      },
     ]
   }
 ]

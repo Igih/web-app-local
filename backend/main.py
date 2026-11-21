@@ -14,6 +14,7 @@ from routers import (
     asset_images,
     asset_overview,
     asset_tags,
+    asset_quality,
 )
 from config import BASE_STORAGE_DIR, IMAGES_DIR, BROWSE_DIR
 import os
@@ -50,6 +51,7 @@ app.include_router(asset_import.router, prefix="/api")
 app.include_router(asset_images.router, prefix="/api")
 app.include_router(asset_overview.router, prefix="/api")
 app.include_router(asset_tags.router, prefix="/api")
+app.include_router(asset_quality.router, prefix="/api")
 
 # @app.get("/{full_path:path}")
 # async def serve_spa(full_path: str):

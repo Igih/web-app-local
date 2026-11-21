@@ -76,6 +76,9 @@
         </el-descriptions-item>
       </el-descriptions>
       <el-button type="success" class="confirm-button" @click="confirm">确认并加入队列</el-button>
+      <el-button class="quality-button" @click="openQuality">
+        进入质量体检
+      </el-button>
     </el-card>
   </el-container>
 </template>
@@ -89,6 +92,9 @@ import {
   getAssetImportPreview,
   scanAssetImport,
 } from '@/services/assetImportService'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const categories = ref([])
 const loading = ref(false)
@@ -137,6 +143,11 @@ const confirm = async () => {
   }
 }
 
+const openQuality = () => {
+  if (!batchId.value) return
+  router.push(`/assets/quality/${batchId.value}`)
+}
+
 onMounted(async () => {
   try {
     categories.value = await getAssetCategories()
@@ -157,5 +168,10 @@ onMounted(async () => {
 
 .confirm-button {
   margin-top: 16px;
+}
+
+.quality-button {
+  margin-top: 16px;
+  margin-left: 10px;
 }
 </style>
